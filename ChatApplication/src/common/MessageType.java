@@ -11,5 +11,6 @@ public enum MessageType {
     CREATE_ROOM,
     JOIN_ROOM,
     ROOM_LIST,
-    USER_LIST
+    USER_LIST,
+    HISTORY
 }

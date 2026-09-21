@@ -7,11 +7,14 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.stream.Collectors;
+import database.MessageDAO;
+import java.util.List;
 
 public class ClientHandler implements Runnable {
 
     private final Socket socket;
     private final ChatServer server;
+    private final MessageDAO messageDAO = new MessageDAO();
     private ObjectOutputStream out;
     private ObjectInputStream in;
     private String username = "Anonymous";
@@ -78,6 +81,7 @@ public class ClientHandler implements Runnable {
         currentRoom.join(this);
 
         send(new Message(MessageType.LOGIN_OK, "server", "Welcome " + username, currentRoom.getName()));
+        sendChatHistory(currentRoom.getName());
         broadcastRoomList();
         sendUserList();
         currentRoom.broadcast(new Message(
@@ -99,14 +103,27 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void handleChat(Message message) {
-        if (currentRoom == null) {
-            return;
-        }
-        message.setType(MessageType.CHAT);
-        message.setRoom(currentRoom.getName());
-        currentRoom.broadcast(message);
+   private void handleChat(Message message) {
+
+    if (currentRoom == null) {
+        return;
     }
+
+    // Đảm bảo đây là tin nhắn CHAT
+    message.setType(MessageType.CHAT);
+
+    // Server tự xác định người gửi
+    message.setSender(username);
+
+    // Server tự xác định phòng hiện tại
+    message.setRoom(currentRoom.getName());
+
+    // 1. Lưu tin nhắn vào SQL Server
+    messageDAO.saveMessage(message);
+
+    // 2. Gửi tin nhắn cho các thành viên trong phòng
+    currentRoom.broadcast(message);
+}
 
     private void joinRoom(String roomName) {
         Room next = server.getRoomManager().getOrCreate(roomName);
@@ -124,6 +141,7 @@ public class ClientHandler implements Runnable {
 
         currentRoom = next;
         currentRoom.join(this);
+        sendChatHistory(currentRoom.getName());
         broadcastRoomList();
         sendUserList();
         currentRoom.broadcast(new Message(
@@ -175,4 +193,37 @@ public class ClientHandler implements Runnable {
             System.out.println("Error closing " + username + ": " + e.getMessage());
         }
     }
+  private void sendChatHistory(String roomName) {
+
+    System.out.println("=== BAT DAU LOAD LICH SU ===");
+    System.out.println("Phong can load: " + roomName);
+
+    List<Message> history =
+            messageDAO.getMessagesByRoom(roomName);
+
+    System.out.println(
+            "So tin nhan tim thay: " + history.size()
+    );
+
+    for (Message oldMessage : history) {
+
+        System.out.println(
+                "History: "
+                + oldMessage.getSender()
+                + " | "
+                + oldMessage.getContent()
+        );
+
+        Message historyMessage = new Message(
+                MessageType.HISTORY,
+                oldMessage.getSender(),
+                oldMessage.getContent(),
+                oldMessage.getRoom()
+        );
+
+        send(historyMessage);
+    }
+
+    System.out.println("=== KET THUC LOAD LICH SU ===");
+}
 }

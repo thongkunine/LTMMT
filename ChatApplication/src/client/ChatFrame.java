@@ -86,26 +86,51 @@ public class ChatFrame extends JFrame {
         connection.startListening();
     }
 
-    public void handleServerMessage(Message message) {
-        switch (message.getType()) {
-            case LOGIN_OK -> {
-                currentRoom = message.getRoom() == null ? "" : message.getRoom();
-                setTitle("Chat - " + username + " @ " + currentRoom);
-                append(message.getContent());
-            }
-            case CHAT -> append(message.getSender() + ": " + message.getContent());
-            case SYSTEM, JOIN, LEAVE -> append("* " + message.getContent());
-            case ROOM_LIST -> updateList(roomModel, message.getContent());
-            case USER_LIST -> {
-                if (currentRoom.isEmpty() || currentRoom.equals(message.getRoom())) {
-                    updateList(userModel, message.getContent());
-                }
-            }
-            default -> {
+public void handleServerMessage(Message message) {
+    switch (message.getType()) {
+        case LOGIN_OK -> {
+            currentRoom = message.getRoom() == null ? "" : message.getRoom();
+
+            setTitle(
+                    "Chat - " + username + " @ " + currentRoom
+            );
+
+            append(message.getContent());
+        }
+
+        case CHAT ->
+            append(
+                    message.getSender()
+                    + ": "
+                    + message.getContent()
+            );
+
+        case HISTORY ->
+            append(
+                    "[Lịch sử] "
+                    + message.getSender()
+                    + ": "
+                    + message.getContent()
+            );
+
+        case SYSTEM, JOIN, LEAVE ->
+            append("* " + message.getContent());
+
+        case ROOM_LIST ->
+            updateList(roomModel, message.getContent());
+
+        case USER_LIST -> {
+            if (currentRoom.isEmpty()
+                    || currentRoom.equals(message.getRoom())) {
+
+                updateList(userModel, message.getContent());
             }
         }
-    }
 
+        default -> {
+        }
+    }
+}
     private void sendChat() {
         String text = inputField.getText().trim();
         if (text.isEmpty()) {
@@ -125,27 +150,78 @@ public class ChatFrame extends JFrame {
             return;
         }
         try {
-            connection.send(new Message(MessageType.CREATE_ROOM, username, name.trim()));
-            currentRoom = name.trim();
-            setTitle("Chat - " + username + " @ " + currentRoom);
-        } catch (IOException e) {
-            append("Cannot create room: " + e.getMessage());
-        }
+
+    chatArea.setText("");
+
+    connection.send(
+            new Message(
+                    MessageType.CREATE_ROOM,
+                    username,
+                    name.trim()
+            )
+    );
+
+    currentRoom = name.trim();
+
+    setTitle(
+            "Chat - "
+            + username
+            + " @ "
+            + currentRoom
+    );
+
+} catch (IOException e) {
+
+    append(
+            "Cannot create room: "
+            + e.getMessage()
+    );
+}
     }
 
-    private void joinSelectedRoom() {
-        String selected = roomList.getSelectedValue();
-        if (selected == null || selected.equals(currentRoom)) {
-            return;
-        }
-        try {
-            connection.send(new Message(MessageType.JOIN_ROOM, username, selected));
-            currentRoom = selected;
-            setTitle("Chat - " + username + " @ " + currentRoom);
-        } catch (IOException e) {
-            append("Cannot join room: " + e.getMessage());
-        }
+   private void joinSelectedRoom() {
+
+    // Lấy phòng đang được chọn
+    String selected = roomList.getSelectedValue();
+
+    // Không chọn phòng hoặc đang ở chính phòng đó
+    if (selected == null || selected.equals(currentRoom)) {
+        return;
     }
+
+    try {
+
+        // Xóa tin nhắn của phòng cũ
+        chatArea.setText("");
+
+        // Gửi yêu cầu JOIN_ROOM lên Server
+        connection.send(
+                new Message(
+                        MessageType.JOIN_ROOM,
+                        username,
+                        selected
+                )
+        );
+
+        // Cập nhật phòng hiện tại
+        currentRoom = selected;
+
+        // Cập nhật tiêu đề
+        setTitle(
+                "Chat - "
+                + username
+                + " @ "
+                + currentRoom
+        );
+
+    } catch (IOException e) {
+
+        append(
+                "Cannot join room: "
+                + e.getMessage()
+        );
+    }
+}
 
     private void updateList(DefaultListModel<String> model, String csv) {
         model.clear();
