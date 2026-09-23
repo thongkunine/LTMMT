@@ -9,7 +9,7 @@ import java.net.Socket;
 import java.util.stream.Collectors;
 import database.MessageDAO;
 import java.util.List;
-
+import java.time.LocalDateTime;
 public class ClientHandler implements Runnable {
 
     private final Socket socket;
@@ -117,7 +117,8 @@ public class ClientHandler implements Runnable {
 
     // Server tự xác định phòng hiện tại
     message.setRoom(currentRoom.getName());
-
+    
+    message.setSentAt(LocalDateTime.now());
     // 1. Lưu tin nhắn vào SQL Server
     messageDAO.saveMessage(message);
 
@@ -220,6 +221,7 @@ public class ClientHandler implements Runnable {
                 oldMessage.getContent(),
                 oldMessage.getRoom()
         );
+        historyMessage.setSentAt(oldMessage.getSentAt());
 
         send(historyMessage);
     }

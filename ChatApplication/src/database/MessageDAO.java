@@ -10,7 +10,7 @@ import java.sql.SQLException;
 
 import java.util.ArrayList;
 import java.util.List;
-
+import java.sql.Timestamp;
 public class MessageDAO {
 
     // Lưu tin nhắn vào SQL Server
@@ -57,7 +57,7 @@ public class MessageDAO {
         List<Message> messages = new ArrayList<>();
 
         String sql = """
-                SELECT username, room_name, content
+                SELECT username, room_name, content, sent_at
                 FROM Messages
                 WHERE room_name = ?
                 ORDER BY sent_at ASC
@@ -77,7 +77,7 @@ public class MessageDAO {
                 String username = rs.getString("username");
                 String room = rs.getString("room_name");
                 String content = rs.getString("content");
-
+                Timestamp sentAt = rs.getTimestamp("sent_at");
                 Message message =
                         new Message(
                                 MessageType.CHAT,
@@ -85,7 +85,9 @@ public class MessageDAO {
                                 content,
                                 room
                         );
-
+                 if (sentAt != null) {
+        message.setSentAt(sentAt.toLocalDateTime());
+    }
                 messages.add(message);
             }
 

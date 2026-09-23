@@ -1,7 +1,7 @@
 package common;
 
 import java.io.Serializable;
-
+import java.time.LocalDateTime;
 public class Message implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -10,7 +10,7 @@ public class Message implements Serializable {
     private String sender;
     private String content;
     private String room;
-
+    private LocalDateTime sentAt;
     public Message() {
     }
 
@@ -56,6 +56,13 @@ public class Message implements Serializable {
     public void setRoom(String room) {
         this.room = room;
     }
+    public LocalDateTime getSentAt() {
+    return sentAt;
+}
+
+public void setSentAt(LocalDateTime sentAt) {
+    this.sentAt = sentAt;
+}
 
     @Override
     public String toString() {

@@ -16,7 +16,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
-
+import java.time.format.DateTimeFormatter;
 public class ChatFrame extends JFrame {
 
     private final String username;
@@ -100,14 +100,16 @@ public void handleServerMessage(Message message) {
 
         case CHAT ->
             append(
-                    message.getSender()
+                    formatTime(message)
+                    +message.getSender()
                     + ": "
                     + message.getContent()
             );
 
         case HISTORY ->
             append(
-                    "[Lịch sử] "
+                    formatTime(message)
+                    +"[Lịch sử] "
                     + message.getSender()
                     + ": "
                     + message.getContent()
@@ -234,7 +236,16 @@ public void handleServerMessage(Message message) {
             }
         }
     }
+private String formatTime(Message message) {
+    if (message.getSentAt() == null) {
+        return "";
+    }
 
+    DateTimeFormatter formatter =
+            DateTimeFormatter.ofPattern("HH:mm");
+
+    return "[" + message.getSentAt().format(formatter) + "] ";
+}
     private void append(String line) {
         chatArea.append(line + System.lineSeparator());
         chatArea.setCaretPosition(chatArea.getDocument().getLength());
