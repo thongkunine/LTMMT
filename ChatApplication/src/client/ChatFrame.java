@@ -17,11 +17,15 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import java.time.format.DateTimeFormatter;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 public class ChatFrame extends JFrame {
 
     private final String username;
     private final ClientConnection connection;
     private final JTextArea chatArea = new JTextArea();
+    private final JButton sendButton = new JButton("Send");
+    private final JButton createRoomButton = new JButton("New room");
     private final JTextField inputField = new JTextField();
     private final DefaultListModel<String> roomModel = new DefaultListModel<>();
     private final DefaultListModel<String> userModel = new DefaultListModel<>();
@@ -34,7 +38,15 @@ public class ChatFrame extends JFrame {
         this.username = username;
         this.connection = connection;
 
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+    @Override
+    public void windowClosing(WindowEvent e) {
+        connection.close();
+        dispose();
+        System.exit(0);
+    }
+});
         setSize(800, 520);
         setLocationRelativeTo(null);
 
@@ -50,8 +62,7 @@ public class ChatFrame extends JFrame {
         sideSplit.setResizeWeight(0.5);
 
         JPanel bottom = new JPanel(new BorderLayout(8, 8));
-        JButton sendButton = new JButton("Send");
-        JButton createRoomButton = new JButton("New room");
+        
         bottom.add(createRoomButton, BorderLayout.WEST);
         bottom.add(inputField, BorderLayout.CENTER);
         bottom.add(sendButton, BorderLayout.EAST);
@@ -76,12 +87,16 @@ public class ChatFrame extends JFrame {
             }
 
             @Override
-            public void onDisconnected() {
-                SwingUtilities.invokeLater(() -> {
-                    append("Disconnected from server.");
-                    inputField.setEnabled(false);
-                });
-            }
+           public void onDisconnected() {
+    SwingUtilities.invokeLater(() -> {
+        append("* Disconnected from server.");
+
+        inputField.setEnabled(false);
+        sendButton.setEnabled(false);
+        createRoomButton.setEnabled(false);
+        roomList.setEnabled(false);
+    });
+}
         });
         connection.startListening();
     }
