@@ -32,7 +32,7 @@ public class LoginFrame extends JFrame {
         gbc.gridx = 0;
         gbc.gridy = 0;
         form.add(new JLabel("Username:"), gbc);
-        gbc.gridx = 1;
+        gbc.gridx = 1;  
         gbc.fill = GridBagConstraints.HORIZONTAL;
         form.add(usernameField, gbc);
 
@@ -59,7 +59,7 @@ public class LoginFrame extends JFrame {
                 Message response = connection.read();
                 SwingUtilities.invokeLater(() -> {
                     if (response != null && response.getType() == MessageType.LOGIN_OK) {
-                        ChatFrame chatFrame = new ChatFrame(username, connection);
+                        chatFramForm chatFrame = new chatFramForm(username, connection);
                         chatFrame.setVisible(true);
                         dispose();
                         chatFrame.handleServerMessage(response);

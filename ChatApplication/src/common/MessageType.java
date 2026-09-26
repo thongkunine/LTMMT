@@ -5,6 +5,7 @@ public enum MessageType {
     LOGIN_OK,
     LOGIN_FAIL,
     CHAT,
+    PRIVATE_MESSAGE,
     JOIN,
     LEAVE,
     SYSTEM,
@@ -13,4 +14,5 @@ public enum MessageType {
     ROOM_LIST,
     USER_LIST,
     HISTORY
+    
 }

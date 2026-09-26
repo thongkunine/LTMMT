@@ -8,6 +8,7 @@ public class Message implements Serializable {
 
     private MessageType type;
     private String sender;
+    private String receiver;
     private String content;
     private String room;
     private LocalDateTime sentAt;
@@ -40,7 +41,12 @@ public class Message implements Serializable {
     public void setSender(String sender) {
         this.sender = sender;
     }
-
+    public String getReceiver(){
+        return  receiver;
+    }
+    public void setReceiver(String receiver){
+        this.receiver = receiver;
+    }
     public String getContent() {
         return content;
     }

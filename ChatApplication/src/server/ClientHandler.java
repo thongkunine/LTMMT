@@ -20,6 +20,25 @@ public class ClientHandler implements Runnable {
     private String username = "Anonymous";
     private Room currentRoom;
 
+    private void broadcastOnlineUsers() {
+
+    String users = String.join(
+            ",",
+            server.getUserManager().getUsernames()
+    );
+
+    Message list = new Message(
+            MessageType.USER_LIST,
+            "server",
+            users
+    );
+
+    for (ClientHandler client
+            : server.getUserManager().getClients()) {
+
+        client.send(list);
+    }
+}
     public ClientHandler(Socket socket, ChatServer server) {
         this.socket = socket;
         this.server = server;
@@ -82,11 +101,15 @@ public class ClientHandler implements Runnable {
 
         send(new Message(MessageType.LOGIN_OK, "server", "Welcome " + username, currentRoom.getName()));
         sendChatHistory(currentRoom.getName());
-        broadcastRoomList();
-        sendUserList();
-        currentRoom.broadcast(new Message(
-                MessageType.SYSTEM, "server", username + " joined the room", currentRoom.getName()));
-        return true;
+       broadcastRoomList();
+       broadcastOnlineUsers();
+
+            currentRoom.broadcast(new Message(
+                        MessageType.SYSTEM,
+                                     "server",
+                        username + " joined the room",
+                         currentRoom.getName()));
+            return true;
     }
 
     private void handle(Message message) {
@@ -96,6 +119,7 @@ public class ClientHandler implements Runnable {
 
         switch (message.getType()) {
             case CHAT -> handleChat(message);
+            case PRIVATE_MESSAGE -> handlePrivateMessage(message);
             case CREATE_ROOM -> joinRoom(server.getRoomManager().getOrCreate(message.getContent()).getName());
             case JOIN_ROOM -> joinRoom(message.getContent());
             default -> {
@@ -125,7 +149,30 @@ public class ClientHandler implements Runnable {
     // 2. Gửi tin nhắn cho các thành viên trong phòng
     currentRoom.broadcast(message);
 }
-
+private void handlePrivateMessage(Message message){
+    
+    String receiver = message.getReceiver();
+    if(receiver== null|| receiver.isBlank()){
+        return;
+    }
+   ClientHandler target =
+           server.getUserManager().getClient(receiver);
+   if (target== null){
+       send( new Message(
+               MessageType.SYSTEM,
+       "server",
+       "người dùng"+ receiver+"hiện không online"
+    ));
+       return;
+   }
+   message.setSender(username);
+   message.setSentAt(LocalDateTime.now());
+   
+   target.send(message);
+   if(target != this){
+       send(message);
+   }
+}
     private void joinRoom(String roomName) {
         Room next = server.getRoomManager().getOrCreate(roomName);
         if (currentRoom == next) {
@@ -179,6 +226,7 @@ public class ClientHandler implements Runnable {
             server.getRoomManager().removeIfEmpty(currentRoom.getName());
         }
         server.getUserManager().logout(username);
+        broadcastOnlineUsers();
 
         try {
             if (in != null) {

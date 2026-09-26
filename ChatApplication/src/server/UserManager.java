@@ -21,7 +21,6 @@ public class UserManager {
             users.remove(username);
         }
     }
-
     public List<String> getUsernames() {
         return new ArrayList<>(users.keySet());
     }
@@ -29,4 +28,12 @@ public class UserManager {
     public Collection<ClientHandler> getClients() {
         return users.values();
     }
+    public ClientHandler getClient(String username){
+         if(username == null|| username.isBlank()){
+             return null;
+         }
+         return users.get(username.trim());
+    }
 }
+
+ 
