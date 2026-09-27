@@ -5,9 +5,12 @@
         <group>
             <file>file:/D:/ltmmm/ChatApplication/src/database/DatabaseTest.java</file>
             <file>file:/D:/ltmmm/ChatApplication/src/common/MessageType.java</file>
+            <file>file:/D:/ltmmm/ChatApplication/src/client/LoginFrame.java</file>
             <file>file:/D:/ltmmm/ChatApplication/src/server/ChatServer.java</file>
+            <file>file:/D:/ltmmm/ChatApplication/src/client/chatFramForm.java</file>
             <file>file:/D:/ltmmm/ChatApplication/src/common/Message.java</file>
             <file>file:/D:/ltmmm/ChatApplication/src/server/UserManager.java</file>
+            <file>file:/D:/ltmmm/ChatApplication/src/database/DatabaseConnection.java</file>
             <file>file:/D:/ltmmm/ChatApplication/src/server/ClientHandler.java</file>
         </group>
     </open-files>

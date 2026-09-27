@@ -8,6 +8,9 @@ import javax.swing.DefaultListModel;
 import javax.swing.SwingUtilities;
 import java.io.IOException;
 import javax.swing.JOptionPane;
+import java.io.File;
+import java.nio.file.Files;
+import javax.swing.JFileChooser;
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JFrame.java to edit this template
@@ -37,6 +40,7 @@ public chatFramForm(String username, ClientConnection connection) {
 
     this.username = username;
     this.connection = connection;
+    lb_namelogin.setText("Dang dang nhap:" +username);
 
     // Gắn model cho danh sách phòng và user
     lstRoom.setModel(roomModel);
@@ -71,6 +75,7 @@ public chatFramForm(String username, ClientConnection connection) {
 
     connection.startListening();
 }
+
 public void handleServerMessage(Message message) {
 
     switch (message.getType()) {
@@ -110,7 +115,7 @@ public void handleServerMessage(Message message) {
         }
 
         case USER_LIST -> {
-    updateList(userModel, message.getContent());
+            updateList(userModel, message.getContent());
 }
         case PRIVATE_MESSAGE -> {
             append(
@@ -122,8 +127,101 @@ public void handleServerMessage(Message message) {
             + message.getContent()
     );
 }
+        case FILE_MESSAGE -> {
+            handleReceivedFile(message);
+}
         default -> {
         }
+    }
+}
+private void handleReceivedFile(Message message) {
+
+    // Nếu đây là bản xác nhận gửi lại cho chính người gửi
+    if (username.equals(message.getSender())) {
+
+        append("[File] Đã gửi "
+                + message.getFileName()
+                + " cho "
+                + message.getReceiver());
+
+        return;
+    }
+
+    // Hiển thị trên khung chat
+    append("[File] "
+            + message.getSender()
+            + " đã gửi cho bạn: "
+            + message.getFileName());
+
+    // Hỏi người nhận có muốn lưu không
+    int choice = JOptionPane.showConfirmDialog(
+            this,
+            message.getSender()
+                    + " đã gửi file:\n"
+                    + message.getFileName()
+                    + "\n\nBạn có muốn lưu file không?",
+            "Nhận file",
+            JOptionPane.YES_NO_OPTION
+    );
+
+    if (choice != JOptionPane.YES_OPTION) {
+        return;
+    }
+
+    saveReceivedFile(message);
+}
+private void saveReceivedFile(Message message) {
+
+    if (message.getFileData() == null) {
+        JOptionPane.showMessageDialog(
+                this,
+                "Không có dữ liệu file!"
+        );
+        return;
+    }
+
+    // Chỉ lấy tên file, tránh đường dẫn không hợp lệ
+    String safeFileName =
+            new File(message.getFileName()).getName();
+
+    JFileChooser fileChooser = new JFileChooser();
+
+    // Đặt sẵn tên file
+    fileChooser.setSelectedFile(
+            new File(safeFileName)
+    );
+
+    int result = fileChooser.showSaveDialog(this);
+
+    if (result != JFileChooser.APPROVE_OPTION) {
+        return;
+    }
+
+    File saveFile = fileChooser.getSelectedFile();
+
+    try {
+
+        Files.write(
+                saveFile.toPath(),
+                message.getFileData()
+        );
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Lưu file thành công!\n"
+                + saveFile.getAbsolutePath()
+        );
+
+        append("[File] Đã lưu: "
+                + saveFile.getName());
+
+    } catch (IOException e) {
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Không thể lưu file: "
+                + e.getMessage()
+        );
     }
 }
 private void append(String text) {
@@ -173,14 +271,22 @@ private void updateList(
         label4 = new java.awt.Label();
         jScrollPane3 = new javax.swing.JScrollPane();
         lstRoom = new javax.swing.JList<>();
+        lb_namelogin = new javax.swing.JLabel();
+        jPanel1 = new javax.swing.JPanel();
+        btn_sendfile = new javax.swing.JButton();
+        btn_call = new javax.swing.JButton();
+        btn_callvideo = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setFont(new java.awt.Font("Times New Roman", 0, 10)); // NOI18N
+        setSize(new java.awt.Dimension(900, 600));
 
         label1.setText("phòng chat ");
         label1.setVisible(false);
 
         label2.setText("phòng chat ");
 
+        label3.setFont(new java.awt.Font("Times New Roman", 0, 12)); // NOI18N
         label3.setText("CHAT APP");
 
         txtChatArea.setEditable(false);
@@ -188,6 +294,11 @@ private void updateList(
         txtChatArea.setRows(5);
         txtChatArea.setName(""); // NOI18N
         jScrollPane1.setViewportView(txtChatArea);
+
+        txtMessage.setFont(new java.awt.Font("Times New Roman", 0, 12)); // NOI18N
+        txtMessage.setToolTipText("");
+        txtMessage.setBorder(javax.swing.BorderFactory.createTitledBorder(""));
+        txtMessage.setCursor(new java.awt.Cursor(java.awt.Cursor.TEXT_CURSOR));
 
         btnSend.setText("send");
         btnSend.addActionListener(new java.awt.event.ActionListener() {
@@ -224,6 +335,7 @@ private void updateList(
         });
         jScrollPane2.setViewportView(lsUsers);
 
+        label4.setFont(new java.awt.Font("Times New Roman", 0, 12)); // NOI18N
         label4.setText("danh sách phong ");
 
         lstRoom.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
@@ -233,84 +345,125 @@ private void updateList(
         });
         jScrollPane3.setViewportView(lstRoom);
 
+        lb_namelogin.setText("long in :");
+
+        javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
+        jPanel1.setLayout(jPanel1Layout);
+        jPanel1Layout.setHorizontalGroup(
+            jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGap(0, 100, Short.MAX_VALUE)
+        );
+        jPanel1Layout.setVerticalGroup(
+            jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGap(0, 100, Short.MAX_VALUE)
+        );
+
+        btn_sendfile.setText("gữi file ");
+        btn_sendfile.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btn_sendfileActionPerformed(evt);
+            }
+        });
+
+        btn_call.setText("gọi thoại ");
+
+        btn_callvideo.setText("gọi video");
+
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
-                .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createSequentialGroup()
-                        .addGap(44, 44, 44)
-                        .addComponent(label2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(label1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(429, 429, 429))
-                    .addGroup(layout.createSequentialGroup()
+                        .addContainerGap()
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(layout.createSequentialGroup()
+                                .addGap(11, 11, 11)
+                                .addComponent(lb_namelogin, javax.swing.GroupLayout.PREFERRED_SIZE, 115, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addComponent(btnCreateRoom)
-                                    .addComponent(txtMessage, javax.swing.GroupLayout.PREFERRED_SIZE, 204, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addGap(210, 210, 210)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addComponent(btnSend, javax.swing.GroupLayout.PREFERRED_SIZE, 111, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addComponent(btnPrivateMessage)))
+                                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                                        .addGap(48, 48, 48)
+                                        .addComponent(label1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addGap(294, 294, 294))
+                                    .addGroup(layout.createSequentialGroup()
+                                        .addGap(100, 100, 100)
+                                        .addComponent(label3, javax.swing.GroupLayout.PREFERRED_SIZE, 79, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addGap(89, 89, 89))))
                             .addGroup(layout.createSequentialGroup()
-                                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 420, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addGroup(layout.createSequentialGroup()
-                                        .addGap(360, 360, 360)
-                                        .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 111, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                    .addGroup(layout.createSequentialGroup()
-                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                            .addComponent(jScrollPane3, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 127, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                                                .addComponent(jLabel1)
-                                                .addGap(79, 79, 79))
-                                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                                                .addComponent(label4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                                .addGap(27, 27, 27)))))))
-                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
+                                .addComponent(label2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(0, 0, Short.MAX_VALUE))
+                            .addGroup(layout.createSequentialGroup()
+                                .addComponent(btn_sendfile, javax.swing.GroupLayout.PREFERRED_SIZE, 94, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(68, 68, 68)
+                                .addComponent(btnPrivateMessage)
+                                .addGap(93, 93, 93)
+                                .addComponent(btn_call)
+                                .addGap(88, 88, 88)
+                                .addComponent(btn_callvideo)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 27, Short.MAX_VALUE))))
+                    .addGroup(layout.createSequentialGroup()
+                        .addGap(28, 28, 28)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(txtMessage, javax.swing.GroupLayout.PREFERRED_SIZE, 458, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 458, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 228, Short.MAX_VALUE)
+                    .addGroup(layout.createSequentialGroup()
+                        .addGap(57, 57, 57)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(btnCreateRoom)
+                            .addComponent(jLabel1)))
+                    .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
+                    .addComponent(btnSend, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(label3, javax.swing.GroupLayout.PREFERRED_SIZE, 236, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(255, 255, 255))
+                .addGap(0, 0, Short.MAX_VALUE)
+                .addComponent(label4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(90, 90, 90))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
-                .addComponent(label3, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(20, 20, 20)
-                .addComponent(label1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createSequentialGroup()
-                        .addGap(6, 6, 6)
-                        .addComponent(label4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addComponent(label3, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(29, 29, 29)
+                        .addComponent(label1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(layout.createSequentialGroup()
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(label2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(layout.createSequentialGroup()
-                        .addGap(19, 19, 19)
-                        .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 113, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(jLabel1)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 75, Short.MAX_VALUE))
-                    .addGroup(layout.createSequentialGroup()
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(jScrollPane1)))
+                        .addGap(63, 63, 63)
+                        .addComponent(lb_namelogin))
+                    .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(btnSend)
-                    .addComponent(txtMessage, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(31, 31, 31)
+                .addComponent(label2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(2, 2, 2)
+                .addComponent(label4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 194, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addGroup(layout.createSequentialGroup()
+                        .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 88, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(btnCreateRoom)
+                        .addGap(18, 18, 18)
+                        .addComponent(jLabel1)
+                        .addGap(18, 18, 18)
+                        .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 47, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(btnSend, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(txtMessage, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 76, Short.MAX_VALUE)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnPrivateMessage)
-                    .addComponent(btnCreateRoom))
-                .addGap(23, 23, 23))
+                    .addComponent(btn_sendfile)
+                    .addComponent(btn_call)
+                    .addComponent(btn_callvideo))
+                .addGap(16, 16, 16))
         );
 
         pack();
@@ -386,7 +539,92 @@ private void sendPrivateMessage() {
     }
          
     }//GEN-LAST:event_lstRoomValueChanged
-private void joinSelectedRoom() {
+
+    private void btn_sendfileActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btn_sendfileActionPerformed
+        // TODO add your handling code here:
+        sendFile();
+    }//GEN-LAST:event_btn_sendfileActionPerformed
+
+    private void sendFile() {
+
+    // 1. Lấy người nhận từ danh sách online
+    String receiver = lsUsers.getSelectedValue();
+
+    if (receiver == null || receiver.isBlank()) {
+        JOptionPane.showMessageDialog(
+                this,
+                "Vui lòng chọn người nhận file!"
+        );
+        return;
+    }
+
+    // Không gửi file cho chính mình
+    if (receiver.equals(username)) {
+        JOptionPane.showMessageDialog(
+                this,
+                "Bạn không thể gửi file cho chính mình!"
+        );
+        return;
+    }
+
+    // 2. Mở cửa sổ chọn file
+    JFileChooser fileChooser = new JFileChooser();
+
+    int result = fileChooser.showOpenDialog(this);
+
+    // Người dùng bấm Cancel
+    if (result != JFileChooser.APPROVE_OPTION) {
+        return;
+    }
+
+    // 3. Lấy file được chọn
+    File file = fileChooser.getSelectedFile();
+
+    long maxFileSize = 10 * 1024 * 1024;
+
+    if (file.length() > maxFileSize) {
+    JOptionPane.showMessageDialog(
+            this,
+            "File quá lớn! Vui lòng chọn file nhỏ hơn 10 MB.");
+        return;
+}
+    
+
+    try {
+
+        // 4. Đọc toàn bộ file thành byte[]
+        byte[] fileData = Files.readAllBytes(file.toPath());
+
+        // 5. Tạo message
+        Message message = new Message(
+                MessageType.FILE_MESSAGE,
+                username,
+                "Gửi file"
+        );
+
+        message.setReceiver(receiver);
+        message.setFileName(file.getName());
+        message.setFileData(fileData);
+
+        // 6. Gửi lên server
+        connection.send(message);
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Đã gửi file "
+                + file.getName()
+                + " cho "
+                + receiver
+        );
+
+    } catch (IOException e) {
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Không thể gửi file: " + e.getMessage()
+        );
+    }
+}private void joinSelectedRoom() {
 
     String selectedRoom = lstRoom.getSelectedValue();
 
@@ -498,7 +736,11 @@ private void joinSelectedRoom() {
     private javax.swing.JButton btnCreateRoom;
     private javax.swing.JButton btnPrivateMessage;
     private javax.swing.JButton btnSend;
+    private javax.swing.JButton btn_call;
+    private javax.swing.JButton btn_callvideo;
+    private javax.swing.JButton btn_sendfile;
     private javax.swing.JLabel jLabel1;
+    private javax.swing.JPanel jPanel1;
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JScrollPane jScrollPane2;
     private javax.swing.JScrollPane jScrollPane3;
@@ -506,6 +748,7 @@ private void joinSelectedRoom() {
     private java.awt.Label label2;
     private java.awt.Label label3;
     private java.awt.Label label4;
+    private javax.swing.JLabel lb_namelogin;
     private javax.swing.JList<String> lsUsers;
     private javax.swing.JList<String> lstRoom;
     private javax.swing.JTextArea txtChatArea;

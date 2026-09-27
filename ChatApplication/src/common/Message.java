@@ -12,9 +12,25 @@ public class Message implements Serializable {
     private String content;
     private String room;
     private LocalDateTime sentAt;
+    private String fileName;
+    private byte[] fileData;
     public Message() {
     }
+    public String getFileName() {
+        return fileName;
+    }
 
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public byte[] getFileData() {
+        return fileData;
+    }
+
+    public void setFileData(byte[] fileData) {
+        this.fileData = fileData;
+    }
     public Message(MessageType type, String sender, String content) {
         this(type, sender, content, null);
     }

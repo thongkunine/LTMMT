@@ -20,6 +20,66 @@ public class ClientHandler implements Runnable {
     private String username = "Anonymous";
     private Room currentRoom;
 
+    private void handleFileMessage(Message message) {
+
+    String receiver = message.getReceiver();
+
+    // Kiểm tra người nhận
+    if (receiver == null || receiver.isBlank()) {
+        send(new Message(
+                MessageType.SYSTEM,
+                "server",
+                "Không xác định được người nhận file."
+        ));
+        return;
+    }
+
+    // Kiểm tra file
+    if (message.getFileData() == null
+            || message.getFileName() == null
+            || message.getFileName().isBlank()) {
+
+        send(new Message(
+                MessageType.SYSTEM,
+                "server",
+                "File không hợp lệ."
+        ));
+        return;
+    }
+
+    // Tìm client người nhận
+    ClientHandler target =
+            server.getUserManager().getClient(receiver);
+
+    if (target == null) {
+        send(new Message(
+                MessageType.SYSTEM,
+                "server",
+                "Người dùng " + receiver + " hiện không online."
+        ));
+        return;
+    }
+
+    // Server xác định lại người gửi
+    message.setSender(username);
+    message.setSentAt(LocalDateTime.now());
+
+    // Gửi file cho người nhận
+    target.send(message);
+
+    // Gửi lại cho người gửi để xác nhận
+    if (target != this) {
+        send(message);
+    }
+
+    System.out.println(
+            username
+            + " gui file "
+            + message.getFileName()
+            + " cho "
+            + receiver
+    );
+}
     private void broadcastOnlineUsers() {
 
     String users = String.join(
@@ -48,7 +108,7 @@ public class ClientHandler implements Runnable {
         return username;
     }
 
-    public void send(Message message) {
+    public synchronized void send(Message message) {
         try {
             if (out != null) {
                 out.writeObject(message);
@@ -120,6 +180,7 @@ public class ClientHandler implements Runnable {
         switch (message.getType()) {
             case CHAT -> handleChat(message);
             case PRIVATE_MESSAGE -> handlePrivateMessage(message);
+            case FILE_MESSAGE -> handleFileMessage(message);
             case CREATE_ROOM -> joinRoom(server.getRoomManager().getOrCreate(message.getContent()).getName());
             case JOIN_ROOM -> joinRoom(message.getContent());
             default -> {

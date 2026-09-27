@@ -13,6 +13,7 @@ public enum MessageType {
     JOIN_ROOM,
     ROOM_LIST,
     USER_LIST,
-    HISTORY
+    HISTORY,
+    FILE_MESSAGE
     
 }
