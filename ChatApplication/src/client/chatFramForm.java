@@ -26,6 +26,8 @@ public class chatFramForm extends javax.swing.JFrame {
     private String currentRoom = "";
     private VoiceCallFrame voiceCallFrame = null;
     private String currentCallUser = null;
+    private VideoCallFrame videoCallFrame = null;
+    private String currentVideoCallUser = null;
     /**
      * Creates new form chatFramForm
      */
@@ -111,7 +113,7 @@ public void handleServerMessage(Message message) {
             append(message.getContent());
         }
 
-        case CHAT -> {
+        case CHAT -> {  
             append(
                     message.getSender()
                     + ": "
@@ -194,9 +196,65 @@ public void handleServerMessage(Message message) {
 
     currentCallUser = null;
 }
+        case VIDEO_CALL_REQUEST -> {
+                handleIncomingVideoCall(message);
+}
+          case VIDEO_CALL_ACCEPT -> {
+
+    append("[Video Call] "
+            + message.getSender()
+            + " đã chấp nhận cuộc gọi.");
+
+    if (videoCallFrame != null) {
+        videoCallFrame.videoCallAccepted();
+    }
+}  
+          case VIDEO_CALL_REJECT -> {
+
+    append("[Video Call] "
+            + message.getSender()
+            + " đã từ chối cuộc gọi.");
+
+    if (videoCallFrame != null) {
+        videoCallFrame.videoCallRejected();
+    }
+
+    currentVideoCallUser = null;
+}
+          case VIDEO_CALL_END -> {
+
+    append("[Video Call] "
+            + message.getSender()
+            + " đã kết thúc cuộc gọi.");
+
+    if (videoCallFrame != null) {
+        videoCallFrame.videoCallEnded();
+    }
+
+    currentVideoCallUser = null;
+}
         default->{
 }
     }
+}
+private void handleIncomingVideoCall(Message message) {
+
+    String caller = message.getSender();
+
+    currentVideoCallUser = caller;
+
+    videoCallFrame = new VideoCallFrame(
+            username,
+            caller,
+            connection,
+            true
+    );
+
+    videoCallFrame.setVisible(true);
+
+    append("[Video Call] "
+            + caller
+            + " đang gọi video cho bạn.");
 }
     private void rejectVoiceCall(String caller) {   
 
@@ -531,6 +589,11 @@ private void updateList(
         });
 
         btn_callvideo.setText("gọi video");
+        btn_callvideo.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btn_callvideoActionPerformed(evt);
+            }
+        });
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
@@ -601,7 +664,6 @@ private void updateList(
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                         .addComponent(lb_namelogin, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(15, 15, 15)))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(label2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(2, 2, 2)
                 .addComponent(label4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -712,7 +774,70 @@ private void sendPrivateMessage() {
         // TODO add your handling code here:
         startVoiceCall();
     }//GEN-LAST:event_btn_voicecallActionPerformed
-private void startVoiceCall() {
+
+    private void btn_callvideoActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btn_callvideoActionPerformed
+        // TODO add your handling code here:
+        startVideoCall();
+    }//GEN-LAST:event_btn_callvideoActionPerformed
+
+  private void startVideoCall() {
+
+    String receiver = lsUsers.getSelectedValue();
+
+    if (receiver == null || receiver.isBlank()) {
+        JOptionPane.showMessageDialog(
+                this,
+                "Vui lòng chọn người muốn gọi video!"
+        );
+        return;
+    }
+
+    if (receiver.equals(username)) {
+        JOptionPane.showMessageDialog(
+                this,
+                "Bạn không thể gọi video cho chính mình!"
+        );
+        return;
+    }
+
+    Message message = new Message(
+            MessageType.VIDEO_CALL_REQUEST,
+            username,
+            "Video call"
+    );
+
+    message.setReceiver(receiver);
+
+    try {
+
+        currentVideoCallUser = receiver;
+
+        connection.send(message);
+
+        videoCallFrame = new VideoCallFrame(
+                username,
+                receiver,
+                connection,
+                false
+        );
+
+        videoCallFrame.setVisible(true);
+
+        append("[Video Call] Đang gọi cho "
+                + receiver + "...");
+
+    } catch (IOException e) {
+
+        currentVideoCallUser = null;
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Không thể thực hiện cuộc gọi video: "
+                + e.getMessage()
+        );
+    }
+}
+    private void startVoiceCall() {
 
     if (voiceCallFrame != null || currentCallUser != null) {
         JOptionPane.showMessageDialog(this, "Bạn đang trong một cuộc gọi khác!");

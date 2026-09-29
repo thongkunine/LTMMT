@@ -264,12 +264,71 @@ public class ClientHandler implements Runnable {
             case CALL_REJECT -> handleCallSignal(message);
             case CALL_END -> handleCallSignal(message);
             case VOICE_DATA -> handleVoiceData(message);
-            
+            case VIDEO_CALL_REQUEST -> handleVideoCallSignal(message);
+            case VIDEO_CALL_ACCEPT -> handleVideoCallSignal(message);
+            case VIDEO_CALL_REJECT -> handleVideoCallSignal(message);
+            case VIDEO_CALL_END -> handleVideoCallSignal(message);
             default -> {
             }
         }
     }
+private void handleVideoCallSignal(Message message) {
 
+    String receiver = message.getReceiver();
+
+    if (receiver == null || receiver.isBlank()) {
+
+        send(new Message(
+                MessageType.SYSTEM,
+                "server",
+                "Không xác định được người nhận cuộc gọi video."
+        ));
+
+        return;
+    }
+
+    ClientHandler target =
+            server.getUserManager().getClient(receiver);
+
+    if (target == null) {
+
+        send(new Message(
+                MessageType.SYSTEM,
+                "server",
+                "Người dùng " + receiver
+                + " hiện không online."
+        ));
+
+        return;
+    }
+
+    // Không cho gọi chính mình
+    if (receiver.equals(username)) {
+
+        send(new Message(
+                MessageType.SYSTEM,
+                "server",
+                "Bạn không thể gọi video cho chính mình."
+        ));
+
+        return;
+    }
+
+    message.setSender(username);
+    message.setSentAt(java.time.LocalDateTime.now());
+
+    // Chuyển tín hiệu cho người nhận
+    target.send(message);
+
+    System.out.println(
+            "[VIDEO CALL] "
+            + username
+            + " -> "
+            + receiver
+            + " : "
+            + message.getType()
+    );
+}
    private void handleChat(Message message) {
 
     if (currentRoom == null) {

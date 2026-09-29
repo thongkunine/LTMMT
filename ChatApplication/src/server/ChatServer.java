@@ -26,6 +26,17 @@ public class ChatServer {
         // Khởi động VoiceServer chạy nền trên port 5001
         VoiceServer voiceServer = new VoiceServer(Protocol.VOICE_PORT);
         Thread voiceThread = new Thread(voiceServer::start, "VoiceServer-Thread");
+        
+        
+        VideoServer videoServer = new VideoServer();
+        Thread videoThread = new Thread(
+            videoServer::start,
+            "VideoServer-Thread"
+    );
+
+    videoThread.setDaemon(true);
+    videoThread.start();
+
         voiceThread.setDaemon(true);
         voiceThread.start();
 

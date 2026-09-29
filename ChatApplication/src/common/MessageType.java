@@ -19,5 +19,10 @@ public enum MessageType {
     CALL_ACCEPT,
     CALL_REJECT,
     CALL_END,
-    VOICE_DATA
+    VOICE_DATA,
+    VIDEO_CALL_REQUEST,
+    VIDEO_CALL_ACCEPT,
+    VIDEO_CALL_REJECT,
+    VIDEO_CALL_END,
+    
 }
