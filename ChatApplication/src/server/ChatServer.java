@@ -23,6 +23,12 @@ public class ChatServer {
     }
 
     public void start() {
+        // Khởi động VoiceServer chạy nền trên port 5001
+        VoiceServer voiceServer = new VoiceServer(Protocol.VOICE_PORT);
+        Thread voiceThread = new Thread(voiceServer::start, "VoiceServer-Thread");
+        voiceThread.setDaemon(true);
+        voiceThread.start();
+
         try (ServerSocket serverSocket = new ServerSocket(Protocol.PORT)) {
             System.out.println("Chat server started on port " + Protocol.PORT);
 

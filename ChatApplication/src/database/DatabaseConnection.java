@@ -20,6 +20,14 @@ public class DatabaseConnection {
             + "encrypt=true;"
             + "trustServerCertificate=true;";
 
+    static {
+        try {
+            Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
+        } catch (ClassNotFoundException e) {
+            System.err.println("Chưa tìm thấy Driver SQL Server trong classpath: " + e.getMessage());
+        }
+    }
+
     public static Connection getConnection() throws SQLException {
         return DriverManager.getConnection(URL);
     }

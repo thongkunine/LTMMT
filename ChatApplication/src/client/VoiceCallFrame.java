@@ -10,12 +10,10 @@ package client;
  */
 import common.Message;
 import common.MessageType;
+import common.Protocol;
 import java.io.IOException;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import javax.sound.sampled.LineUnavailableException;
 import javax.swing.JOptionPane;
 
@@ -28,12 +26,9 @@ public class VoiceCallFrame extends javax.swing.JFrame {
     private String otherUser;
     private ClientConnection connection;
     private VoiceCallManager voiceCallManager;
+    private VoiceClient voiceClient;
     private boolean incomingCall;
     private Runnable onCloseCallback;
-
-    private Thread recordingThread;
-    private Thread playbackThread;
-    private final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
     private volatile boolean inCall = false;
 
     // Constructor mặc định cho NetBeans
@@ -67,6 +62,7 @@ public class VoiceCallFrame extends javax.swing.JFrame {
         this.onCloseCallback = onCloseCallback;
 
         this.voiceCallManager = new VoiceCallManager();
+        this.voiceClient = new VoiceClient();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -216,67 +212,27 @@ public class VoiceCallFrame extends javax.swing.JFrame {
         }
         try {
             voiceCallManager.start();
+            voiceClient.connect(Protocol.HOST, Protocol.VOICE_PORT, username, otherUser);
+            voiceClient.startStreaming(voiceCallManager);
             inCall = true;
         } catch (LineUnavailableException e) {
             JOptionPane.showMessageDialog(this, "Không thể mở microphone hoặc loa: " + e.getMessage());
             endCall();
-            return;
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Không thể kết nối đến VoiceServer: " + e.getMessage());
+            endCall();
         }
-
-        // Thread phát âm thanh từ audioQueue ra loa
-        playbackThread = new Thread(() -> {
-            while (inCall && voiceCallManager != null && voiceCallManager.isRunning()) {
-                try {
-                    byte[] data = audioQueue.poll(100, TimeUnit.MILLISECONDS);
-                    if (data != null && inCall) {
-                        voiceCallManager.playAudio(data);
-                    }
-                } catch (InterruptedException e) {
-                    break;
-                }
-            }
-        }, "Voice-Playback-Thread");
-        playbackThread.setDaemon(true);
-        playbackThread.start();
-
-        // Thread đọc mic và gửi qua socket
-        recordingThread = new Thread(() -> {
-            while (inCall && voiceCallManager != null && voiceCallManager.isRunning()) {
-                byte[] audio = voiceCallManager.readMicrophone();
-                if (audio != null && audio.length > 0 && inCall) {
-                    Message audioMsg = new Message(MessageType.VOICE_DATA, username, null);
-                    audioMsg.setReceiver(otherUser);
-                    audioMsg.setVoiceData(audio);
-                    try {
-                        connection.send(audioMsg);
-                    } catch (IOException e) {
-                        System.out.println("Không thể gửi gói thoại: " + e.getMessage());
-                        break;
-                    }
-                }
-            }
-        }, "Voice-Record-Thread");
-        recordingThread.setDaemon(true);
-        recordingThread.start();
     }
 
     public void receiveAudio(byte[] data) {
-        if (inCall && data != null && data.length > 0) {
-            audioQueue.offer(data);
-        }
+        // VoiceClient tự động nhận và phát audio trực tiếp từ VoiceServer
     }
 
     private synchronized void stopVoiceStreams() {
         inCall = false;
-        if (recordingThread != null) {
-            recordingThread.interrupt();
-            recordingThread = null;
+        if (voiceClient != null) {
+            voiceClient.disconnect();
         }
-        if (playbackThread != null) {
-            playbackThread.interrupt();
-            playbackThread = null;
-        }
-        audioQueue.clear();
         if (voiceCallManager != null) {
             voiceCallManager.stop();
         }
