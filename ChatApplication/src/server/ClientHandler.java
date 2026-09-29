@@ -20,6 +20,81 @@ public class ClientHandler implements Runnable {
     private String username = "Anonymous";
     private Room currentRoom;
 
+    
+    private void handleVoiceData(Message message) {
+        String receiver = message.getReceiver();
+        if (receiver == null || receiver.isBlank()) {
+            return;
+        }
+        ClientHandler target = server.getUserManager().getClient(receiver);
+        if (target != null) {
+            message.setSender(username);
+            target.send(message);
+        }
+    }
+
+    private void handleCallSignal(Message message) {
+
+    String receiver = message.getReceiver();
+
+    // Không có người nhận
+    if (receiver == null || receiver.isBlank()) {
+        send(new Message(
+                MessageType.SYSTEM,
+                "server",
+                "Không xác định được người nhận cuộc gọi."
+        ));
+        return;
+    }
+
+    // Tìm người nhận đang online
+    ClientHandler target =
+            server.getUserManager().getClient(receiver);
+
+    if (target == null) {
+        send(new Message(
+                MessageType.SYSTEM,
+                "server",
+                "Người dùng " + receiver + " hiện không online."
+        ));
+        if (message.getType() == MessageType.CALL_REQUEST) {
+            Message reject = new Message(
+                    MessageType.CALL_REJECT,
+                    receiver,
+                    "Offline"
+            );
+            reject.setReceiver(username);
+            send(reject);
+        }
+        return;
+    }
+
+    // Không cho gọi chính mình
+    if (receiver.equals(username)) {
+        send(new Message(
+                MessageType.SYSTEM,
+                "server",
+                "Bạn không thể gọi cho chính mình."
+        ));
+        return;
+    }
+
+    // Server xác nhận người gửi thật
+    message.setSender(username);
+    message.setSentAt(LocalDateTime.now());
+
+    // Chuyển tín hiệu cho người nhận
+    target.send(message);
+
+    System.out.println(
+            "[VOICE CALL] "
+            + username
+            + " -> "
+            + receiver
+            + " : "
+            + message.getType()
+    );
+}
     private void handleFileMessage(Message message) {
 
     String receiver = message.getReceiver();
@@ -113,6 +188,7 @@ public class ClientHandler implements Runnable {
             if (out != null) {
                 out.writeObject(message);
                 out.flush();
+                out.reset();
             }
         } catch (IOException e) {
             System.out.println("Cannot send to " + username + ": " + e.getMessage());
@@ -183,6 +259,12 @@ public class ClientHandler implements Runnable {
             case FILE_MESSAGE -> handleFileMessage(message);
             case CREATE_ROOM -> joinRoom(server.getRoomManager().getOrCreate(message.getContent()).getName());
             case JOIN_ROOM -> joinRoom(message.getContent());
+            case CALL_REQUEST -> handleCallSignal(message);
+            case CALL_ACCEPT -> handleCallSignal(message);
+            case CALL_REJECT -> handleCallSignal(message);
+            case CALL_END -> handleCallSignal(message);
+            case VOICE_DATA -> handleVoiceData(message);
+            
             default -> {
             }
         }

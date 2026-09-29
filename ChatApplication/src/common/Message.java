@@ -14,6 +14,7 @@ public class Message implements Serializable {
     private LocalDateTime sentAt;
     private String fileName;
     private byte[] fileData;
+    private byte[] voiceData;
     public Message() {
     }
     public String getFileName() {
@@ -30,6 +31,14 @@ public class Message implements Serializable {
 
     public void setFileData(byte[] fileData) {
         this.fileData = fileData;
+    }
+
+    public byte[] getVoiceData() {
+        return voiceData != null ? voiceData : fileData;
+    }
+
+    public void setVoiceData(byte[] voiceData) {
+        this.voiceData = voiceData;
     }
     public Message(MessageType type, String sender, String content) {
         this(type, sender, content, null);

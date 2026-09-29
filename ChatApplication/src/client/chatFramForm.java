@@ -24,6 +24,8 @@ public class chatFramForm extends javax.swing.JFrame {
     private String username;
     private ClientConnection connection;
     private String currentRoom = "";
+    private VoiceCallFrame voiceCallFrame = null;
+    private String currentCallUser = null;
     /**
      * Creates new form chatFramForm
      */
@@ -40,7 +42,7 @@ public chatFramForm(String username, ClientConnection connection) {
 
     this.username = username;
     this.connection = connection;
-    lb_namelogin.setText("Dang dang nhap:" +username);
+    lb_namelogin.setText("Dang dang nhap:"+username);
 
     // Gắn model cho danh sách phòng và user
     lstRoom.setModel(roomModel);
@@ -49,10 +51,30 @@ public chatFramForm(String username, ClientConnection connection) {
     setTitle("Chat - " + username);
     setLocationRelativeTo(null);
 
+    setDefaultCloseOperation(javax.swing.WindowConstants.DO_NOTHING_ON_CLOSE);
+    addWindowListener(new java.awt.event.WindowAdapter() {
+        @Override
+        public void windowClosing(java.awt.event.WindowEvent evt) {
+            if (voiceCallFrame != null) {
+                voiceCallFrame.dispose();
+            }
+            connection.close();
+            dispose();
+            System.exit(0);
+        }
+    });
+
     connection.setListener(new ClientConnection.MessageListener() {
 
         @Override
         public void onMessage(Message message) {
+            if (message.getType() == MessageType.VOICE_DATA) {
+                if (voiceCallFrame != null) {
+                    voiceCallFrame.receiveAudio(message.getVoiceData());
+                }
+                return;
+            }
+
             SwingUtilities.invokeLater(() -> {
                 handleServerMessage(message);
             });
@@ -130,9 +152,143 @@ public void handleServerMessage(Message message) {
         case FILE_MESSAGE -> {
             handleReceivedFile(message);
 }
-        default -> {
-        }
+        case CALL_REQUEST -> {
+            handleIncomingCall(message);
+}
+        case CALL_ACCEPT -> {
+
+            currentCallUser = message.getSender();
+
+            append("[Cuộc gọi] "
+                + message.getSender()
+                + " đã chấp nhận cuộc gọi.");
+
+    if (voiceCallFrame != null) {
+        voiceCallFrame.callAccepted();
     }
+}
+
+        case CALL_REJECT -> {
+
+    append("[Cuộc gọi] "
+            + message.getSender()
+            + " đã từ chối cuộc gọi.");
+
+    if (voiceCallFrame != null) {
+        voiceCallFrame.callRejected();
+        voiceCallFrame = null;
+    }
+
+    currentCallUser = null;
+}
+        case CALL_END -> {
+
+    append("[Cuộc gọi] "
+            + message.getSender()
+            + " đã kết thúc cuộc gọi.");
+
+    if (voiceCallFrame != null) {
+        voiceCallFrame.callEnded();
+        voiceCallFrame = null;
+    }
+
+    currentCallUser = null;
+}
+        default->{
+}
+    }
+}
+    private void rejectVoiceCall(String caller) {   
+
+    Message message = new Message(
+            MessageType.CALL_REJECT,
+            username,
+            "Rejected"
+    );
+
+    message.setReceiver(caller);
+
+    try {
+        connection.send(message);
+
+        append("[Cuộc gọi] Đã từ chối cuộc gọi từ "
+                + caller);
+
+        currentCallUser = null;
+
+    } catch (IOException e) {
+
+        currentCallUser = null;
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Không thể từ chối cuộc gọi: "
+                + e.getMessage()
+        );
+    }
+}
+private void acceptVoiceCall(String caller) {
+
+    Message message = new Message(
+            MessageType.CALL_ACCEPT,
+            username,
+            "Accepted"
+    );
+
+    message.setReceiver(caller);
+
+    try {
+        connection.send(message);
+
+        currentCallUser = caller;
+
+        append("[Cuộc gọi] Đã chấp nhận cuộc gọi từ "
+                + caller);
+
+    } catch (IOException e) {
+
+        currentCallUser = null;
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Không thể chấp nhận cuộc gọi: "
+                + e.getMessage()
+        );
+    }
+}
+private void handleIncomingCall(Message message) {
+
+    String caller = message.getSender();
+
+    if (voiceCallFrame != null || currentCallUser != null) {
+        Message busy = new Message(
+                MessageType.CALL_REJECT,
+                username,
+                "Busy"
+        );
+        busy.setReceiver(caller);
+        try {
+            connection.send(busy);
+        } catch (IOException ignored) {
+        }
+        append("[Cuộc gọi] Đang bận, đã từ chối cuộc gọi từ " + caller);
+        return;
+    }
+
+    currentCallUser = caller;
+
+    voiceCallFrame = new VoiceCallFrame(
+            username,
+            caller,
+            connection,
+            true,
+            () -> {
+                voiceCallFrame = null;
+                currentCallUser = null;
+            }
+    );
+
+    voiceCallFrame.setVisible(true);
 }
 private void handleReceivedFile(Message message) {
 
@@ -274,7 +430,7 @@ private void updateList(
         lb_namelogin = new javax.swing.JLabel();
         jPanel1 = new javax.swing.JPanel();
         btn_sendfile = new javax.swing.JButton();
-        btn_call = new javax.swing.JButton();
+        btn_voicecall = new javax.swing.JButton();
         btn_callvideo = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
@@ -345,7 +501,9 @@ private void updateList(
         });
         jScrollPane3.setViewportView(lstRoom);
 
-        lb_namelogin.setText("long in :");
+        lb_namelogin.setForeground(new java.awt.Color(102, 255, 0));
+        lb_namelogin.setText("log in :");
+        lb_namelogin.setMaximumSize(new java.awt.Dimension(50, 16));
 
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
@@ -365,7 +523,12 @@ private void updateList(
             }
         });
 
-        btn_call.setText("gọi thoại ");
+        btn_voicecall.setText("gọi thoại ");
+        btn_voicecall.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btn_voicecallActionPerformed(evt);
+            }
+        });
 
         btn_callvideo.setText("gọi video");
 
@@ -379,8 +542,22 @@ private void updateList(
                         .addContainerGap()
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(layout.createSequentialGroup()
-                                .addGap(11, 11, 11)
-                                .addComponent(lb_namelogin, javax.swing.GroupLayout.PREFERRED_SIZE, 115, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(btn_sendfile, javax.swing.GroupLayout.PREFERRED_SIZE, 94, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(68, 68, 68)
+                                .addComponent(btnPrivateMessage)
+                                .addGap(93, 93, 93)
+                                .addComponent(btn_voicecall)
+                                .addGap(88, 88, 88)
+                                .addComponent(btn_callvideo)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 27, Short.MAX_VALUE))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                                .addGap(0, 0, Short.MAX_VALUE)
+                                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 458, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(163, 163, 163))
+                            .addGroup(layout.createSequentialGroup()
+                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                                    .addComponent(lb_namelogin, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(label2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                                 .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -391,24 +568,10 @@ private void updateList(
                                     .addGroup(layout.createSequentialGroup()
                                         .addGap(100, 100, 100)
                                         .addComponent(label3, javax.swing.GroupLayout.PREFERRED_SIZE, 79, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                        .addGap(89, 89, 89))))
-                            .addGroup(layout.createSequentialGroup()
-                                .addComponent(label2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(0, 0, Short.MAX_VALUE))
-                            .addGroup(layout.createSequentialGroup()
-                                .addComponent(btn_sendfile, javax.swing.GroupLayout.PREFERRED_SIZE, 94, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(68, 68, 68)
-                                .addComponent(btnPrivateMessage)
-                                .addGap(93, 93, 93)
-                                .addComponent(btn_call)
-                                .addGap(88, 88, 88)
-                                .addComponent(btn_callvideo)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 27, Short.MAX_VALUE))))
+                                        .addGap(89, 89, 89))))))
                     .addGroup(layout.createSequentialGroup()
                         .addGap(28, 28, 28)
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                            .addComponent(txtMessage, javax.swing.GroupLayout.PREFERRED_SIZE, 458, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 458, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addComponent(txtMessage, javax.swing.GroupLayout.PREFERRED_SIZE, 458, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                     .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 228, Short.MAX_VALUE)
@@ -434,10 +597,10 @@ private void updateList(
                         .addComponent(label3, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(29, 29, 29)
                         .addComponent(label1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addGroup(layout.createSequentialGroup()
-                        .addGap(63, 63, 63)
-                        .addComponent(lb_namelogin))
-                    .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                        .addComponent(lb_namelogin, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(15, 15, 15)))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(label2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(2, 2, 2)
@@ -461,7 +624,7 @@ private void updateList(
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnPrivateMessage)
                     .addComponent(btn_sendfile)
-                    .addComponent(btn_call)
+                    .addComponent(btn_voicecall)
                     .addComponent(btn_callvideo))
                 .addGap(16, 16, 16))
         );
@@ -545,6 +708,78 @@ private void sendPrivateMessage() {
         sendFile();
     }//GEN-LAST:event_btn_sendfileActionPerformed
 
+    private void btn_voicecallActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btn_voicecallActionPerformed
+        // TODO add your handling code here:
+        startVoiceCall();
+    }//GEN-LAST:event_btn_voicecallActionPerformed
+private void startVoiceCall() {
+
+    if (voiceCallFrame != null || currentCallUser != null) {
+        JOptionPane.showMessageDialog(this, "Bạn đang trong một cuộc gọi khác!");
+        return;
+    }
+
+    // Lấy người được chọn trong danh sách online
+    String receiver = lsUsers.getSelectedValue();
+
+    if (receiver == null || receiver.isBlank()) {
+        JOptionPane.showMessageDialog(
+                this,
+                "Vui lòng chọn người muốn gọi!"
+        );
+        return;
+    }
+
+    // Không cho gọi chính mình
+    if (receiver.equals(username)) {
+        JOptionPane.showMessageDialog(
+                this,
+                "Bạn không thể gọi cho chính mình!"
+        );
+        return;
+    }
+
+    // Tạo yêu cầu gọi
+    Message message = new Message(
+            MessageType.CALL_REQUEST,
+            username,
+            "Voice call"
+    );
+
+    message.setReceiver(receiver);
+
+   try {
+
+    currentCallUser = receiver;
+
+    connection.send(message);
+
+   voiceCallFrame = new VoiceCallFrame(
+        username,
+        receiver,
+        connection,
+        false,
+        () -> {
+            voiceCallFrame = null;
+            currentCallUser = null;
+        }
+   );
+
+   voiceCallFrame.setVisible(true);
+
+   append("[Cuộc gọi] Đang gọi cho " + receiver + "...");
+
+} catch (IOException e) {
+
+    currentCallUser = null;
+
+    JOptionPane.showMessageDialog(
+            this,
+            "Không thể thực hiện cuộc gọi: "
+            + e.getMessage()
+    );
+}
+}
     private void sendFile() {
 
     // 1. Lấy người nhận từ danh sách online
@@ -736,9 +971,9 @@ private void sendPrivateMessage() {
     private javax.swing.JButton btnCreateRoom;
     private javax.swing.JButton btnPrivateMessage;
     private javax.swing.JButton btnSend;
-    private javax.swing.JButton btn_call;
     private javax.swing.JButton btn_callvideo;
     private javax.swing.JButton btn_sendfile;
+    private javax.swing.JButton btn_voicecall;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JScrollPane jScrollPane1;

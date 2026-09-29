@@ -14,6 +14,10 @@ public enum MessageType {
     ROOM_LIST,
     USER_LIST,
     HISTORY,
-    FILE_MESSAGE
-    
+    FILE_MESSAGE,
+    CALL_REQUEST,
+    CALL_ACCEPT,
+    CALL_REJECT,
+    CALL_END,
+    VOICE_DATA
 }
