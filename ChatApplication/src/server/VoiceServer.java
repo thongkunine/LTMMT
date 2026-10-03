@@ -120,6 +120,15 @@ public class VoiceServer {
                     VoiceClientHandler targetHandler = clients.get(targetUser);
                     if (targetHandler != null && targetHandler.isActive()) {
                         targetHandler.sendAudio(buffer, length);
+                    } else {
+                        // Group voice call broadcast: send audio to all other clients in same target room
+                        for (Map.Entry<String, VoiceClientHandler> entry : clients.entrySet()) {
+                            String cUser = entry.getKey();
+                            VoiceClientHandler h = entry.getValue();
+                            if (!cUser.equals(username) && targetUser.equals(h.getTargetUser()) && h.isActive()) {
+                                h.sendAudio(buffer, length);
+                            }
+                        }
                     }
                 }
             } catch (IOException e) {
@@ -127,6 +136,10 @@ public class VoiceServer {
             } finally {
                 close();
             }
+        }
+
+        public String getTargetUser() {
+            return targetUser;
         }
 
         public synchronized void sendAudio(byte[] data, int length) {

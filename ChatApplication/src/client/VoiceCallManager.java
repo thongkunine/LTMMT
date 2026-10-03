@@ -61,10 +61,29 @@ public class VoiceCallManager {
         }
     }
 
+    private volatile boolean micMuted = false;
+    private volatile boolean speakerMuted = false;
+
+    public void setMicMuted(boolean muted) {
+        this.micMuted = muted;
+    }
+
+    public boolean isMicMuted() {
+        return micMuted;
+    }
+
+    public void setSpeakerMuted(boolean muted) {
+        this.speakerMuted = muted;
+    }
+
+    public boolean isSpeakerMuted() {
+        return speakerMuted;
+    }
+
     // Đọc dữ liệu từ microphone
     public byte[] readMicrophone() {
 
-        if (!running || microphone == null) {
+        if (!running || microphone == null || micMuted) {
             return null;
         }
 
@@ -102,7 +121,8 @@ public class VoiceCallManager {
 
         if (!running
                 || speaker == null
-                || audioData == null) {
+                || audioData == null
+                || speakerMuted) {
             return;
         }
 

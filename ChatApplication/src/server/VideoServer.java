@@ -91,14 +91,21 @@ public class VideoServer {
                 // Đọc JPEG
                 byte[] frameData = new byte[frameLength];
                 input.readFully(frameData);
-                // Tìm người nhận
-                VideoConnection target
-                    = clients.get(targetUser);
 
-               if (target != null) {
-                 target.sendFrame(frameData);
+                // 1-on-1 call check
+                VideoConnection target = clients.get(targetUser);
+                if (target != null) {
+                    target.sendFrame(frameData);
+                } else {
+                    // Group video call broadcast: send frame to all clients in same target room except sender
+                    for (java.util.Map.Entry<String, VideoConnection> entry : clients.entrySet()) {
+                        String clientUser = entry.getKey();
+                        VideoConnection conn = entry.getValue();
+                        if (!clientUser.equals(username) && targetUser.equals(conn.getTargetUser())) {
+                            conn.sendFrame(frameData);
+                        }
+                    }
                 }
-                    
             }
 
         } catch (IOException e) {
@@ -135,6 +142,10 @@ public class VideoServer {
             this.socket = socket;
             this.output = output;
             this.targetUser = targetUser;
+        }
+
+        public String getTargetUser() {
+            return targetUser;
         }
 
         public synchronized void sendFrame(byte[] frameData) {

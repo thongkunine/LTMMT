@@ -11,7 +11,7 @@ public class ChatClient {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | UnsupportedLookAndFeelException ignored) {
             }
-            new LoginFrame().setVisible(true);
+            new LoginForm().setVisible(true);
         });
     }
 }

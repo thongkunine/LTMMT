@@ -19,6 +19,7 @@ public class ClientHandler implements Runnable {
     private ObjectInputStream in;
     private String username = "Anonymous";
     private Room currentRoom;
+    private final java.util.Set<Room> joinedRooms = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     
     private void handleVoiceData(Message message) {
@@ -34,127 +35,117 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleCallSignal(Message message) {
+        message.setSender(username);
+        message.setSentAt(LocalDateTime.now());
 
-    String receiver = message.getReceiver();
-
-    // Không có người nhận
-    if (receiver == null || receiver.isBlank()) {
-        send(new Message(
-                MessageType.SYSTEM,
-                "server",
-                "Không xác định được người nhận cuộc gọi."
-        ));
-        return;
-    }
-
-    // Tìm người nhận đang online
-    ClientHandler target =
-            server.getUserManager().getClient(receiver);
-
-    if (target == null) {
-        send(new Message(
-                MessageType.SYSTEM,
-                "server",
-                "Người dùng " + receiver + " hiện không online."
-        ));
-        if (message.getType() == MessageType.CALL_REQUEST) {
-            Message reject = new Message(
-                    MessageType.CALL_REJECT,
-                    receiver,
-                    "Offline"
-            );
-            reject.setReceiver(username);
-            send(reject);
+        String receiver = message.getReceiver();
+        if (receiver == null || receiver.isBlank()) {
+            String roomName = message.getRoom();
+            if (roomName != null && !roomName.isBlank()) {
+                Room room = server.getRoomManager().get(roomName);
+                if (room != null) {
+                    for (ClientHandler client : room.getMembers()) {
+                        if (client != this) {
+                            client.send(message);
+                        }
+                    }
+                }
+            }
+            return;
         }
-        return;
+
+        ClientHandler target = server.getUserManager().getClient(receiver);
+        if (target == null) {
+            if (message.getType() == MessageType.CALL_REQUEST) {
+                Message reject = new Message(MessageType.CALL_REJECT, receiver, "Offline");
+                reject.setReceiver(username);
+                send(reject);
+            }
+            return;
+        }
+        if (!receiver.equals(username)) {
+            target.send(message);
+        }
     }
-
-    // Không cho gọi chính mình
-    if (receiver.equals(username)) {
-        send(new Message(
-                MessageType.SYSTEM,
-                "server",
-                "Bạn không thể gọi cho chính mình."
-        ));
-        return;
-    }
-
-    // Server xác nhận người gửi thật
-    message.setSender(username);
-    message.setSentAt(LocalDateTime.now());
-
-    // Chuyển tín hiệu cho người nhận
-    target.send(message);
-
-    System.out.println(
-            "[VOICE CALL] "
-            + username
-            + " -> "
-            + receiver
-            + " : "
-            + message.getType()
-    );
-}
     private void handleFileMessage(Message message) {
+        if (message.getFileData() == null
+                || message.getFileName() == null
+                || message.getFileName().isBlank()) {
 
-    String receiver = message.getReceiver();
+            send(new Message(
+                    MessageType.SYSTEM,
+                    "server",
+                    "File không hợp lệ."
+            ));
+            return;
+        }
 
-    // Kiểm tra người nhận
-    if (receiver == null || receiver.isBlank()) {
-        send(new Message(
-                MessageType.SYSTEM,
-                "server",
-                "Không xác định được người nhận file."
-        ));
-        return;
+        message.setSender(username);
+        message.setSentAt(LocalDateTime.now());
+
+        String receiver = message.getReceiver();
+        if (receiver == null || receiver.isBlank()) {
+            String roomName = message.getRoom();
+            if (roomName == null || roomName.isBlank()) {
+                if (currentRoom != null) {
+                    roomName = currentRoom.getName();
+                    message.setRoom(roomName);
+                }
+            }
+            Room room = roomName != null ? server.getRoomManager().get(roomName) : null;
+            if (room != null) {
+                room.broadcast(message);
+                Message dbFileMsg = new Message(MessageType.CHAT, username, "[File] Đã gửi file: " + message.getFileName(), roomName);
+                dbFileMsg.setSentAt(message.getSentAt());
+                messageDAO.saveMessage(dbFileMsg);
+            } else {
+                send(new Message(
+                        MessageType.SYSTEM,
+                        "server",
+                        "Không xác định được phòng nhận file."
+                ));
+            }
+            return;
+        }
+
+        // Tìm client người nhận
+        ClientHandler target = server.getUserManager().getClient(receiver);
+
+        if (target == null) {
+            send(new Message(
+                    MessageType.SYSTEM,
+                    "server",
+                    "Người dùng " + receiver + " hiện không online."
+            ));
+            return;
+        }
+
+        if (message.getRoom() == null || message.getRoom().isBlank()) {
+            String u1 = username;
+            String u2 = receiver;
+            String roomKey = "PRIVATE:" + (u1.compareTo(u2) < 0 ? u1 + "_" + u2 : u2 + "_" + u1);
+            message.setRoom(roomKey);
+        }
+        Message dbFileMsg = new Message(MessageType.PRIVATE_MESSAGE, username, "[File] Đã gửi file: " + message.getFileName(), message.getRoom());
+        dbFileMsg.setSentAt(message.getSentAt());
+        messageDAO.saveMessage(dbFileMsg);
+
+        // Gửi file cho người nhận
+        target.send(message);
+
+        // Gửi lại cho người gửi để xác nhận
+        if (target != this) {
+            send(message);
+        }
+
+        System.out.println(
+                username
+                + " gui file "
+                + message.getFileName()
+                + " cho "
+                + receiver
+        );
     }
-
-    // Kiểm tra file
-    if (message.getFileData() == null
-            || message.getFileName() == null
-            || message.getFileName().isBlank()) {
-
-        send(new Message(
-                MessageType.SYSTEM,
-                "server",
-                "File không hợp lệ."
-        ));
-        return;
-    }
-
-    // Tìm client người nhận
-    ClientHandler target =
-            server.getUserManager().getClient(receiver);
-
-    if (target == null) {
-        send(new Message(
-                MessageType.SYSTEM,
-                "server",
-                "Người dùng " + receiver + " hiện không online."
-        ));
-        return;
-    }
-
-    // Server xác định lại người gửi
-    message.setSender(username);
-    message.setSentAt(LocalDateTime.now());
-
-    // Gửi file cho người nhận
-    target.send(message);
-
-    // Gửi lại cho người gửi để xác nhận
-    if (target != this) {
-        send(message);
-    }
-
-    System.out.println(
-            username
-            + " gui file "
-            + message.getFileName()
-            + " cho "
-            + receiver
-    );
-}
     private void broadcastOnlineUsers() {
 
     String users = String.join(
@@ -219,13 +210,31 @@ public class ClientHandler implements Runnable {
     }
 
     private boolean handleLogin() throws IOException, ClassNotFoundException {
-        Message login = (Message) in.readObject();
-        if (login == null || login.getType() != MessageType.LOGIN) {
+        Object incoming = in.readObject();
+        if (!(incoming instanceof Message msg) || msg == null) {
+            send(new Message(MessageType.LOGIN_FAIL, "server", "Invalid request"));
+            return false;
+        }
+
+        if (msg.getType() == MessageType.REGISTER) {
+            String uname = msg.getSender();
+            String pwd = msg.getContent();
+            String fullName = msg.getRoom();
+            boolean ok = server.getUserManager().register(uname, pwd, fullName);
+            if (ok) {
+                send(new Message(MessageType.REGISTER_OK, "server", "Đăng ký thành công!"));
+            } else {
+                send(new Message(MessageType.REGISTER_FAIL, "server", "Đăng ký thất bại! Tên đăng nhập đã tồn tại."));
+            }
+            return false;
+        }
+
+        if (msg.getType() != MessageType.LOGIN) {
             send(new Message(MessageType.LOGIN_FAIL, "server", "Invalid login request"));
             return false;
         }
 
-        String name = login.getSender();
+        String name = msg.getSender();
         if (!server.getUserManager().login(name, this)) {
             send(new Message(MessageType.LOGIN_FAIL, "server", "Username is empty or already taken"));
             return false;
@@ -234,18 +243,19 @@ public class ClientHandler implements Runnable {
         username = name.trim();
         currentRoom = server.getRoomManager().getDefaultRoom();
         currentRoom.join(this);
+        joinedRooms.add(currentRoom);
 
         send(new Message(MessageType.LOGIN_OK, "server", "Welcome " + username, currentRoom.getName()));
         sendChatHistory(currentRoom.getName());
-       broadcastRoomList();
-       broadcastOnlineUsers();
+        broadcastRoomList();
+        broadcastOnlineUsers();
 
-            currentRoom.broadcast(new Message(
-                        MessageType.SYSTEM,
-                                     "server",
-                        username + " joined the room",
-                         currentRoom.getName()));
-            return true;
+        currentRoom.broadcast(new Message(
+                MessageType.SYSTEM,
+                "server",
+                username + " joined the room",
+                currentRoom.getName()));
+        return true;
     }
 
     private void handle(Message message) {
@@ -259,6 +269,7 @@ public class ClientHandler implements Runnable {
             case FILE_MESSAGE -> handleFileMessage(message);
             case CREATE_ROOM -> joinRoom(server.getRoomManager().getOrCreate(message.getContent()).getName());
             case JOIN_ROOM -> joinRoom(message.getContent());
+            case LEAVE -> handleLeaveRoom(message);
             case CALL_REQUEST -> handleCallSignal(message);
             case CALL_ACCEPT -> handleCallSignal(message);
             case CALL_REJECT -> handleCallSignal(message);
@@ -272,66 +283,38 @@ public class ClientHandler implements Runnable {
             }
         }
     }
-private void handleVideoCallSignal(Message message) {
+    private void handleVideoCallSignal(Message message) {
+        message.setSender(username);
+        message.setSentAt(LocalDateTime.now());
 
-    String receiver = message.getReceiver();
+        String receiver = message.getReceiver();
+        if (receiver == null || receiver.isBlank()) {
+            String roomName = message.getRoom();
+            if (roomName != null && !roomName.isBlank()) {
+                Room room = server.getRoomManager().get(roomName);
+                if (room != null) {
+                    for (ClientHandler client : room.getMembers()) {
+                        if (client != this) {
+                            client.send(message);
+                        }
+                    }
+                }
+            }
+            return;
+        }
 
-    if (receiver == null || receiver.isBlank()) {
-
-        send(new Message(
-                MessageType.SYSTEM,
-                "server",
-                "Không xác định được người nhận cuộc gọi video."
-        ));
-
-        return;
+        ClientHandler target = server.getUserManager().getClient(receiver);
+        if (target == null) {
+            return;
+        }
+        if (!receiver.equals(username)) {
+            target.send(message);
+        }
     }
-
-    ClientHandler target =
-            server.getUserManager().getClient(receiver);
-
-    if (target == null) {
-
-        send(new Message(
-                MessageType.SYSTEM,
-                "server",
-                "Người dùng " + receiver
-                + " hiện không online."
-        ));
-
-        return;
-    }
-
-    // Không cho gọi chính mình
-    if (receiver.equals(username)) {
-
-        send(new Message(
-                MessageType.SYSTEM,
-                "server",
-                "Bạn không thể gọi video cho chính mình."
-        ));
-
-        return;
-    }
-
-    message.setSender(username);
-    message.setSentAt(java.time.LocalDateTime.now());
-
-    // Chuyển tín hiệu cho người nhận
-    target.send(message);
-
-    System.out.println(
-            "[VIDEO CALL] "
-            + username
-            + " -> "
-            + receiver
-            + " : "
-            + message.getType()
-    );
-}
    private void handleChat(Message message) {
-
-    if (currentRoom == null) {
+    String rName = message.getRoom();
+    Room targetRoom = (rName != null && !rName.isBlank()) ? server.getRoomManager().get(rName) : currentRoom;
+    if (targetRoom == null) {
         return;
     }
 
@@ -341,61 +324,97 @@ private void handleVideoCallSignal(Message message) {
     // Server tự xác định người gửi
     message.setSender(username);
 
-    // Server tự xác định phòng hiện tại
-    message.setRoom(currentRoom.getName());
-    
+    // Server tự xác định phòng
+    message.setRoom(targetRoom.getName());
+
     message.setSentAt(LocalDateTime.now());
     // 1. Lưu tin nhắn vào SQL Server
     messageDAO.saveMessage(message);
 
     // 2. Gửi tin nhắn cho các thành viên trong phòng
-    currentRoom.broadcast(message);
+    targetRoom.broadcast(message);
 }
 private void handlePrivateMessage(Message message){
-    
     String receiver = message.getReceiver();
     if(receiver== null|| receiver.isBlank()){
         return;
     }
-   ClientHandler target =
-           server.getUserManager().getClient(receiver);
-   if (target== null){
-       send( new Message(
-               MessageType.SYSTEM,
-       "server",
-       "người dùng"+ receiver+"hiện không online"
-    ));
-       return;
-   }
-   message.setSender(username);
-   message.setSentAt(LocalDateTime.now());
-   
-   target.send(message);
-   if(target != this){
-       send(message);
-   }
+    ClientHandler target = server.getUserManager().getClient(receiver);
+    message.setSender(username);
+    message.setSentAt(LocalDateTime.now());
+
+    if (message.getRoom() == null || message.getRoom().isBlank()) {
+        String u1 = username;
+        String u2 = receiver;
+        String roomKey = "PRIVATE:" + (u1.compareTo(u2) < 0 ? u1 + "_" + u2 : u2 + "_" + u1);
+        message.setRoom(roomKey);
+    }
+    messageDAO.saveMessage(message);
+
+    if (target != null) {
+        target.send(message);
+    }
+    if (target != this) {
+        send(message);
+    }
 }
     private void joinRoom(String roomName) {
         Room next = server.getRoomManager().getOrCreate(roomName);
-        if (currentRoom == next) {
-            return;
-        }
-
-        if (currentRoom != null) {
-            currentRoom.leave(this);
-            currentRoom.broadcast(new Message(
-                    MessageType.SYSTEM, "server", username + " left the room", currentRoom.getName()));
-            sendUserListToRoom(currentRoom);
-            server.getRoomManager().removeIfEmpty(currentRoom.getName());
+        if (!joinedRooms.contains(next)) {
+            next.join(this);
+            joinedRooms.add(next);
+            next.broadcast(new Message(
+                    MessageType.SYSTEM, "server", username + " joined the room", next.getName()));
         }
 
         currentRoom = next;
-        currentRoom.join(this);
         sendChatHistory(currentRoom.getName());
         broadcastRoomList();
         sendUserList();
-        currentRoom.broadcast(new Message(
-                MessageType.SYSTEM, "server", username + " joined the room", currentRoom.getName()));
+    }
+
+    private void handleLeaveRoom(Message message) {
+        String roomName = message.getRoom();
+        if (roomName == null || roomName.isBlank()) {
+            roomName = message.getContent();
+        }
+        if (roomName == null || roomName.isBlank()) {
+            if (currentRoom != null) {
+                roomName = currentRoom.getName();
+            }
+        }
+        if (roomName == null || roomName.isBlank()) {
+            return;
+        }
+
+        Room room = server.getRoomManager().get(roomName);
+        if (room != null && joinedRooms.contains(room)) {
+            Message leaveSysMsg = new Message(
+                    MessageType.SYSTEM, "server", username + " đã rời khỏi phòng " + roomName, roomName);
+            leaveSysMsg.setSentAt(LocalDateTime.now());
+            messageDAO.saveMessage(leaveSysMsg);
+            room.broadcast(leaveSysMsg);
+
+            room.leave(this);
+            joinedRooms.remove(room);
+            sendUserListToRoom(room);
+            server.getRoomManager().removeIfEmpty(room.getName());
+
+            if (currentRoom == room) {
+                if (!joinedRooms.isEmpty()) {
+                    currentRoom = joinedRooms.iterator().next();
+                } else {
+                    Room defaultRoom = server.getRoomManager().getDefaultRoom();
+                    defaultRoom.join(this);
+                    joinedRooms.add(defaultRoom);
+                    currentRoom = defaultRoom;
+                }
+                send(new Message(MessageType.LEAVE, "server", "Bạn đã rời khỏi phòng " + roomName, currentRoom.getName()));
+                sendChatHistory(currentRoom.getName());
+                sendUserList();
+            }
+            broadcastRoomList();
+        }
     }
 
     private void broadcastRoomList() {
@@ -420,13 +439,14 @@ private void handlePrivateMessage(Message message){
     }
 
     private void close() {
-        if (currentRoom != null) {
-            currentRoom.leave(this);
-            currentRoom.broadcast(new Message(
-                    MessageType.LEAVE, "server", username + " left the chat", currentRoom.getName()));
-            sendUserListToRoom(currentRoom);
-            server.getRoomManager().removeIfEmpty(currentRoom.getName());
+        for (Room r : new java.util.ArrayList<>(joinedRooms)) {
+            r.leave(this);
+            r.broadcast(new Message(
+                    MessageType.LEAVE, "server", username + " left the chat", r.getName()));
+            sendUserListToRoom(r);
+            server.getRoomManager().removeIfEmpty(r.getName());
         }
+        joinedRooms.clear();
         server.getUserManager().logout(username);
         broadcastOnlineUsers();
 
@@ -469,7 +489,7 @@ private void handlePrivateMessage(Message message){
                 MessageType.HISTORY,
                 oldMessage.getSender(),
                 oldMessage.getContent(),
-                oldMessage.getRoom()
+                (oldMessage.getRoom() != null && !oldMessage.getRoom().isBlank()) ? oldMessage.getRoom() : roomName
         );
         historyMessage.setSentAt(oldMessage.getSentAt());
 
