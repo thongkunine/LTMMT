@@ -1,19 +1,45 @@
 package common;
 
 import java.io.Serializable;
-
+import java.time.LocalDateTime;
 public class Message implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     private MessageType type;
     private String sender;
+    private String receiver;
     private String content;
     private String room;
-
+    private LocalDateTime sentAt;
+    private String fileName;
+    private byte[] fileData;
+    private byte[] voiceData;
     public Message() {
     }
+    public String getFileName() {
+        return fileName;
+    }
 
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public byte[] getFileData() {
+        return fileData;
+    }
+
+    public void setFileData(byte[] fileData) {
+        this.fileData = fileData;
+    }
+
+    public byte[] getVoiceData() {
+        return voiceData != null ? voiceData : fileData;
+    }
+
+    public void setVoiceData(byte[] voiceData) {
+        this.voiceData = voiceData;
+    }
     public Message(MessageType type, String sender, String content) {
         this(type, sender, content, null);
     }
@@ -40,7 +66,12 @@ public class Message implements Serializable {
     public void setSender(String sender) {
         this.sender = sender;
     }
-
+    public String getReceiver(){
+        return  receiver;
+    }
+    public void setReceiver(String receiver){
+        this.receiver = receiver;
+    }
     public String getContent() {
         return content;
     }
@@ -56,6 +87,13 @@ public class Message implements Serializable {
     public void setRoom(String room) {
         this.room = room;
     }
+    public LocalDateTime getSentAt() {
+    return sentAt;
+}
+
+public void setSentAt(LocalDateTime sentAt) {
+    this.sentAt = sentAt;
+}
 
     @Override
     public String toString() {
