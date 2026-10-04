@@ -16,12 +16,16 @@ import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
-
+import java.time.format.DateTimeFormatter;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 public class ChatFrame extends JFrame {
 
     private final String username;
     private final ClientConnection connection;
     private final JTextArea chatArea = new JTextArea();
+    private final JButton sendButton = new JButton("Send");
+    private final JButton createRoomButton = new JButton("New room");
     private final JTextField inputField = new JTextField();
     private final DefaultListModel<String> roomModel = new DefaultListModel<>();
     private final DefaultListModel<String> userModel = new DefaultListModel<>();
@@ -34,7 +38,15 @@ public class ChatFrame extends JFrame {
         this.username = username;
         this.connection = connection;
 
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+    @Override
+    public void windowClosing(WindowEvent e) {
+        connection.close();
+        dispose();
+        System.exit(0);
+    }
+});
         setSize(800, 520);
         setLocationRelativeTo(null);
 
@@ -50,8 +62,7 @@ public class ChatFrame extends JFrame {
         sideSplit.setResizeWeight(0.5);
 
         JPanel bottom = new JPanel(new BorderLayout(8, 8));
-        JButton sendButton = new JButton("Send");
-        JButton createRoomButton = new JButton("New room");
+        
         bottom.add(createRoomButton, BorderLayout.WEST);
         bottom.add(inputField, BorderLayout.CENTER);
         bottom.add(sendButton, BorderLayout.EAST);
@@ -76,36 +87,67 @@ public class ChatFrame extends JFrame {
             }
 
             @Override
-            public void onDisconnected() {
-                SwingUtilities.invokeLater(() -> {
-                    append("Disconnected from server.");
-                    inputField.setEnabled(false);
-                });
-            }
+           public void onDisconnected() {
+    SwingUtilities.invokeLater(() -> {
+        append("* Disconnected from server.");
+
+        inputField.setEnabled(false);
+        sendButton.setEnabled(false);
+        createRoomButton.setEnabled(false);
+        roomList.setEnabled(false);
+    });
+}
         });
         connection.startListening();
     }
 
-    public void handleServerMessage(Message message) {
-        switch (message.getType()) {
-            case LOGIN_OK -> {
-                currentRoom = message.getRoom() == null ? "" : message.getRoom();
-                setTitle("Chat - " + username + " @ " + currentRoom);
-                append(message.getContent());
-            }
-            case CHAT -> append(message.getSender() + ": " + message.getContent());
-            case SYSTEM, JOIN, LEAVE -> append("* " + message.getContent());
-            case ROOM_LIST -> updateList(roomModel, message.getContent());
-            case USER_LIST -> {
-                if (currentRoom.isEmpty() || currentRoom.equals(message.getRoom())) {
-                    updateList(userModel, message.getContent());
-                }
-            }
-            default -> {
+public void handleServerMessage(Message message) {
+    switch (message.getType()) {
+        case LOGIN_OK -> {
+            currentRoom = message.getRoom() == null ? "" : message.getRoom();
+
+            setTitle(
+                    "Chat - " + username + " @ " + currentRoom
+            );
+
+            append(message.getContent());
+        }
+
+        case CHAT ->
+            append(
+                    formatTime(message)
+                    +message.getSender()
+                    + ": "
+                    + message.getContent()
+            );
+
+        case HISTORY ->
+            append(
+                    formatTime(message)
+                    +"[Lịch sử] "
+                    + message.getSender()
+                    + ": "
+                    + message.getContent()
+            );
+
+        case SYSTEM, JOIN, LEAVE ->
+            append("* " + message.getContent());
+
+        case ROOM_LIST ->
+            updateList(roomModel, message.getContent());
+
+        case USER_LIST -> {
+            if (currentRoom.isEmpty()
+                    || currentRoom.equals(message.getRoom())) {
+
+                updateList(userModel, message.getContent());
             }
         }
-    }
 
+        default -> {
+        }
+    }
+}
     private void sendChat() {
         String text = inputField.getText().trim();
         if (text.isEmpty()) {
@@ -125,27 +167,78 @@ public class ChatFrame extends JFrame {
             return;
         }
         try {
-            connection.send(new Message(MessageType.CREATE_ROOM, username, name.trim()));
-            currentRoom = name.trim();
-            setTitle("Chat - " + username + " @ " + currentRoom);
-        } catch (IOException e) {
-            append("Cannot create room: " + e.getMessage());
-        }
+
+    chatArea.setText("");
+
+    connection.send(
+            new Message(
+                    MessageType.CREATE_ROOM,
+                    username,
+                    name.trim()
+            )
+    );
+
+    currentRoom = name.trim();
+
+    setTitle(
+            "Chat - "
+            + username
+            + " @ "
+            + currentRoom
+    );
+
+} catch (IOException e) {
+
+    append(
+            "Cannot create room: "
+            + e.getMessage()
+    );
+}
     }
 
-    private void joinSelectedRoom() {
-        String selected = roomList.getSelectedValue();
-        if (selected == null || selected.equals(currentRoom)) {
-            return;
-        }
-        try {
-            connection.send(new Message(MessageType.JOIN_ROOM, username, selected));
-            currentRoom = selected;
-            setTitle("Chat - " + username + " @ " + currentRoom);
-        } catch (IOException e) {
-            append("Cannot join room: " + e.getMessage());
-        }
+   private void joinSelectedRoom() {
+
+    // Lấy phòng đang được chọn
+    String selected = roomList.getSelectedValue();
+
+    // Không chọn phòng hoặc đang ở chính phòng đó
+    if (selected == null || selected.equals(currentRoom)) {
+        return;
     }
+
+    try {
+
+        // Xóa tin nhắn của phòng cũ
+        chatArea.setText("");
+
+        // Gửi yêu cầu JOIN_ROOM lên Server
+        connection.send(
+                new Message(
+                        MessageType.JOIN_ROOM,
+                        username,
+                        selected
+                )
+        );
+
+        // Cập nhật phòng hiện tại
+        currentRoom = selected;
+
+        // Cập nhật tiêu đề
+        setTitle(
+                "Chat - "
+                + username
+                + " @ "
+                + currentRoom
+        );
+
+    } catch (IOException e) {
+
+        append(
+                "Cannot join room: "
+                + e.getMessage()
+        );
+    }
+}
 
     private void updateList(DefaultListModel<String> model, String csv) {
         model.clear();
@@ -158,7 +251,16 @@ public class ChatFrame extends JFrame {
             }
         }
     }
+private String formatTime(Message message) {
+    if (message.getSentAt() == null) {
+        return "";
+    }
 
+    DateTimeFormatter formatter =
+            DateTimeFormatter.ofPattern("HH:mm");
+
+    return "[" + message.getSentAt().format(formatter) + "] ";
+}
     private void append(String line) {
         chatArea.append(line + System.lineSeparator());
         chatArea.setCaretPosition(chatArea.getDocument().getLength());

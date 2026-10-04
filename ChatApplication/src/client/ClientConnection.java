@@ -30,9 +30,12 @@ public class ClientConnection {
         in = new ObjectInputStream(socket.getInputStream());
     }
 
-    public void send(Message message) throws IOException {
-        out.writeObject(message);
-        out.flush();
+    public synchronized void send(Message message) throws IOException {
+        if (out != null) {
+            out.writeObject(message);
+            out.flush();
+            out.reset();
+        }
     }
 
     public Message read() throws IOException, ClassNotFoundException {
