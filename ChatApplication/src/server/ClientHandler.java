@@ -8,6 +8,7 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.stream.Collectors;
 import database.MessageDAO;
+import database.UserDAO;
 import java.util.List;
 import java.time.LocalDateTime;
 public class ClientHandler implements Runnable {
@@ -15,6 +16,7 @@ public class ClientHandler implements Runnable {
     private final Socket socket;
     private final ChatServer server;
     private final MessageDAO messageDAO = new MessageDAO();
+    private final UserDAO userDAO = new UserDAO();
     private ObjectOutputStream out;
     private ObjectInputStream in;
     private String username = "Anonymous";
@@ -209,55 +211,164 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private boolean handleLogin() throws IOException, ClassNotFoundException {
-        Object incoming = in.readObject();
-        if (!(incoming instanceof Message msg) || msg == null) {
-            send(new Message(MessageType.LOGIN_FAIL, "server", "Invalid request"));
-            return false;
-        }
+   private boolean handleLogin() throws IOException, ClassNotFoundException {
 
-        if (msg.getType() == MessageType.REGISTER) {
-            String uname = msg.getSender();
-            String pwd = msg.getContent();
-            String fullName = msg.getRoom();
-            boolean ok = server.getUserManager().register(uname, pwd, fullName);
-            if (ok) {
-                send(new Message(MessageType.REGISTER_OK, "server", "Đăng ký thành công!"));
-            } else {
-                send(new Message(MessageType.REGISTER_FAIL, "server", "Đăng ký thất bại! Tên đăng nhập đã tồn tại."));
-            }
-            return false;
-        }
+    Object incoming = in.readObject();
 
-        if (msg.getType() != MessageType.LOGIN) {
-            send(new Message(MessageType.LOGIN_FAIL, "server", "Invalid login request"));
-            return false;
-        }
-
-        String name = msg.getSender();
-        if (!server.getUserManager().login(name, this)) {
-            send(new Message(MessageType.LOGIN_FAIL, "server", "Username is empty or already taken"));
-            return false;
-        }
-
-        username = name.trim();
-        currentRoom = server.getRoomManager().getDefaultRoom();
-        currentRoom.join(this);
-        joinedRooms.add(currentRoom);
-
-        send(new Message(MessageType.LOGIN_OK, "server", "Welcome " + username, currentRoom.getName()));
-        sendChatHistory(currentRoom.getName());
-        broadcastRoomList();
-        broadcastOnlineUsers();
-
-        currentRoom.broadcast(new Message(
-                MessageType.SYSTEM,
+    if (!(incoming instanceof Message msg) || msg == null) {
+        send(new Message(
+                MessageType.LOGIN_FAIL,
                 "server",
-                username + " joined the room",
-                currentRoom.getName()));
-        return true;
+                "Yêu cầu không hợp lệ!"
+        ));
+        return false;
     }
 
+    // ==========================
+    // ĐĂNG KÝ
+    // ==========================
+    if (msg.getType() == MessageType.REGISTER) {
+
+        String uname = msg.getSender();
+        String pwd = msg.getContent();
+        String fullName = msg.getRoom();
+
+        if (uname == null || uname.isBlank()
+                || pwd == null || pwd.isBlank()
+                || fullName == null || fullName.isBlank()) {
+
+            send(new Message(
+                    MessageType.REGISTER_FAIL,
+                    "server",
+                    "Vui lòng nhập đầy đủ thông tin!"
+            ));
+
+            return false;
+        }
+
+        uname = uname.trim();
+
+        // Kiểm tra username đã tồn tại trong SQL Server chưa
+        if (userDAO.usernameExists(uname)) {
+
+            send(new Message(
+                    MessageType.REGISTER_FAIL,
+                    "server",
+                    "Tên đăng nhập đã tồn tại!"
+            ));
+
+            return false;
+        }
+
+        // Lưu tài khoản vào SQL Server
+        boolean ok = userDAO.register(
+                fullName.trim(),
+                uname,
+                pwd
+        );
+
+        if (ok) {
+            send(new Message(
+                    MessageType.REGISTER_OK,
+                    "server",
+                    "Đăng ký thành công!"
+            ));
+        } else {
+            send(new Message(
+                    MessageType.REGISTER_FAIL,
+                    "server",
+                    "Đăng ký thất bại!"
+            ));
+        }
+
+        return false;
+    }
+
+    // ==========================
+    // ĐĂNG NHẬP
+    // ==========================
+    if (msg.getType() != MessageType.LOGIN) {
+
+        send(new Message(
+                MessageType.LOGIN_FAIL,
+                "server",
+                "Yêu cầu đăng nhập không hợp lệ!"
+        ));
+
+        return false;
+    }
+
+    String name = msg.getSender();
+    String password = msg.getContent();
+
+    if (name == null || name.isBlank()
+            || password == null || password.isBlank()) {
+
+        send(new Message(
+                MessageType.LOGIN_FAIL,
+                "server",
+                "Vui lòng nhập Username và Mật khẩu!"
+        ));
+
+        return false;
+    }
+
+    name = name.trim();
+
+    // Kiểm tra username + password trong SQL Server
+    if (!userDAO.login(name, password)) {
+
+        send(new Message(
+                MessageType.LOGIN_FAIL,
+                "server",
+                "Sai tên đăng nhập hoặc mật khẩu!"
+        ));
+
+        return false;
+    }
+
+    // SQL đúng rồi -> kiểm tra user có đang online không
+    if (!server.getUserManager().login(name, this)) {
+
+        send(new Message(
+                MessageType.LOGIN_FAIL,
+                "server",
+                "Tài khoản này đang được đăng nhập!"
+        ));
+
+        return false;
+    }
+
+    // ==========================
+    // LOGIN THÀNH CÔNG
+    // ==========================
+
+    username = name;
+
+    currentRoom = server.getRoomManager().getDefaultRoom();
+    currentRoom.join(this);
+    joinedRooms.add(currentRoom);
+
+    send(new Message(
+            MessageType.LOGIN_OK,
+            "server",
+            "Đăng nhập thành công! Xin chào " + username,
+            currentRoom.getName()
+    ));
+
+    sendChatHistory(currentRoom.getName());
+    broadcastRoomList();
+    broadcastOnlineUsers();
+
+    currentRoom.broadcast(new Message(
+            MessageType.SYSTEM,
+            "server",
+            username + " joined the room",
+            currentRoom.getName()
+    ));
+
+    return true;
+}
     private void handle(Message message) {
         if (message.getSender() == null || message.getSender().isBlank()) {
             message.setSender(username);

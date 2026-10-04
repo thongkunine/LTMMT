@@ -112,7 +112,7 @@ public class LoginForm extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void btnLoginActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnLoginActionPerformed
-        String username = txtUsername.getText().trim();
+         String username = txtUsername.getText().trim();
         String password = new String(txtPassword.getPassword()).trim();
 
         if (username.isEmpty()) {
