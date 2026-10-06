@@ -266,7 +266,7 @@ public class VoiceCallFrame extends javax.swing.JFrame {
         });
 
         btnToggleSpeaker.setFont(new java.awt.Font("Segoe UI", 0, 13)); // NOI18N
-        btnToggleSpeaker.setText("Loa ngoài");
+        btnToggleSpeaker.setText("Loa ngòai");
         btnToggleSpeaker.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnToggleSpeakerActionPerformed(evt);
@@ -292,14 +292,15 @@ public class VoiceCallFrame extends javax.swing.JFrame {
                     .addComponent(lb_callername, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(lb_callstatus, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
-                        .addComponent(btnAccept, javax.swing.GroupLayout.PREFERRED_SIZE, 160, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(40, 40, 40)
-                        .addComponent(btnReject, javax.swing.GroupLayout.PREFERRED_SIZE, 160, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(0, 0, Short.MAX_VALUE))
-                    .addGroup(layout.createSequentialGroup()
-                        .addComponent(btnMuteMic, javax.swing.GroupLayout.PREFERRED_SIZE, 160, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(40, 40, 40)
-                        .addComponent(btnToggleSpeaker, javax.swing.GroupLayout.PREFERRED_SIZE, 160, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(layout.createSequentialGroup()
+                                .addComponent(btnAccept, javax.swing.GroupLayout.PREFERRED_SIZE, 160, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(40, 40, 40)
+                                .addComponent(btnReject, javax.swing.GroupLayout.PREFERRED_SIZE, 160, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(layout.createSequentialGroup()
+                                .addComponent(btnMuteMic, javax.swing.GroupLayout.PREFERRED_SIZE, 160, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(40, 40, 40)
+                                .addComponent(btnToggleSpeaker, javax.swing.GroupLayout.PREFERRED_SIZE, 160, javax.swing.GroupLayout.PREFERRED_SIZE)))
                         .addGap(0, 0, Short.MAX_VALUE)))
                 .addGap(30, 30, 30))
             .addGroup(layout.createSequentialGroup()
@@ -329,6 +330,7 @@ public class VoiceCallFrame extends javax.swing.JFrame {
         );
 
         pack();
+        setLocationRelativeTo(null);
     }// </editor-fold>//GEN-END:initComponents
 
     private void btnAcceptActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnAcceptActionPerformed
@@ -395,7 +397,9 @@ public class VoiceCallFrame extends javax.swing.JFrame {
     }
 
     public void receiveAudio(byte[] data) {
-        // VoiceClient tự động nhận và phát audio trực tiếp từ VoiceServer
+        if (voiceCallManager != null && inCall && data != null) {
+            voiceCallManager.playAudio(data);
+        }
     }
 
     private synchronized void stopVoiceStreams() {
@@ -565,7 +569,6 @@ public class VoiceCallFrame extends javax.swing.JFrame {
     private javax.swing.JButton btnMuteMic;
     private javax.swing.JButton btnReject;
     private javax.swing.JButton btnToggleSpeaker;
-    private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel lb_call;
     private javax.swing.JLabel lb_callername;
     private javax.swing.JLabel lb_callstatus;

@@ -1,23 +1,39 @@
 package server;
 
 import common.Protocol;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * VoiceServer: Server chuyên trách chuyển tiếp dữ liệu âm thanh giữa 2 client qua TCP.
+ * VoiceServer: UDP Relay Server xử lý truyền và chuyển tiếp âm thanh 2 chiều thời gian thực giữa các client.
+ * Lập trình UDP Socket 2 chiều:
+ * - Nhận các gói tin DatagramPacket từ client (vừa nhận).
+ * - Chuyển tiếp ngay lập tức đến đích (vừa gửi) mà không chờ xác nhận, chấp nhận mất gói tin (UDP Packet Loss)
+ *   để đảm bảo độ trễ thấp nhất (Real-time Latency).
+ * Hỗ trợ cả cuộc gọi riêng 1-1 và cuộc gọi thoại nhóm (Room).
  */
 public class VoiceServer {
 
+    // Mã định danh loại gói tin UDP
+    public static final byte TYPE_REGISTER = 1;
+    public static final byte TYPE_AUDIO = 2;
+    public static final byte TYPE_DISCONNECT = 3;
+    public static final byte TYPE_HEARTBEAT = 4;
+
     private final int port;
-    private ServerSocket serverSocket;
+    private DatagramSocket socket;
     private volatile boolean running = false;
-    private final Map<String, VoiceClientHandler> clients = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, VoiceClientEndpoint> clients = new ConcurrentHashMap<>();
+    private Thread cleanupThread;
 
     public VoiceServer() {
         this(Protocol.VOICE_PORT);
@@ -34,141 +50,198 @@ public class VoiceServer {
     public void start() {
         running = true;
         try {
-            serverSocket = new ServerSocket(port);
-            System.out.println("[VoiceServer] Started on port " + port);
+            socket = new DatagramSocket(port);
+            System.out.println("[VoiceServer-UDP] Khởi động thành công trên cổng UDP " + port);
 
-            while (running && !serverSocket.isClosed()) {
-                Socket socket = serverSocket.accept();
-                VoiceClientHandler handler = new VoiceClientHandler(socket);
-                Thread thread = new Thread(handler, "VoiceHandler-" + socket.getRemoteSocketAddress());
-                thread.setDaemon(true);
-                thread.start();
+            // Luồng dọn dẹp các endpoint không hoạt động quá 30 giây
+            cleanupThread = new Thread(this::cleanupStaleEndpoints, "VoiceServer-UDP-Cleanup");
+            cleanupThread.setDaemon(true);
+            cleanupThread.start();
+
+            byte[] buffer = new byte[4096];
+            while (running && !socket.isClosed()) {
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                socket.receive(packet);
+
+                // Xử lý gói tin nhận được từ UDP socket
+                handleIncomingPacket(packet);
+            }
+        } catch (SocketException e) {
+            if (running) {
+                System.out.println("[VoiceServer-UDP] Socket error: " + e.getMessage());
             }
         } catch (IOException e) {
             if (running) {
-                System.out.println("[VoiceServer] Error: " + e.getMessage());
+                System.out.println("[VoiceServer-UDP] IO error: " + e.getMessage());
             }
         } finally {
             stop();
         }
     }
 
-    public void stop() {
-        running = false;
+    private void handleIncomingPacket(DatagramPacket packet) {
         try {
-            if (serverSocket != null && !serverSocket.isClosed()) {
-                serverSocket.close();
+            DataInputStream in = new DataInputStream(
+                new ByteArrayInputStream(packet.getData(), packet.getOffset(), packet.getLength())
+            );
+
+            byte type = in.readByte();
+            switch (type) {
+                case TYPE_REGISTER -> {
+                    String username = in.readUTF();
+                    String targetUser = in.readUTF();
+                    VoiceClientEndpoint endpoint = new VoiceClientEndpoint(
+                        username, packet.getAddress(), packet.getPort(), targetUser, System.currentTimeMillis()
+                    );
+                    clients.put(username, endpoint);
+                    System.out.println("[VoiceServer-UDP] Client đã đăng ký: " + username
+                        + " (IP: " + packet.getAddress().getHostAddress() + ":" + packet.getPort() + ") -> Đích: " + targetUser);
+
+                    // Gửi gói tin ACK phản hồi cho client
+                    sendAck(endpoint);
+                }
+                case TYPE_AUDIO -> {
+                    String sender = in.readUTF();
+                    String target = in.readUTF();
+                    long seq = in.readLong();
+                    int audioLen = in.readInt();
+
+                    // Cập nhật lại IP, port và thời gian hoạt động của người gửi (NAT keep-alive)
+                    VoiceClientEndpoint senderEndpoint = clients.get(sender);
+                    if (senderEndpoint != null) {
+                        senderEndpoint.address = packet.getAddress();
+                        senderEndpoint.port = packet.getPort();
+                        senderEndpoint.lastActiveTime = System.currentTimeMillis();
+                    } else {
+                        senderEndpoint = new VoiceClientEndpoint(
+                            sender, packet.getAddress(), packet.getPort(), target, System.currentTimeMillis()
+                        );
+                        clients.put(sender, senderEndpoint);
+                    }
+
+                    // Chuyển tiếp gói tin âm thanh sang cho đối phương (UDP Forwarding)
+                    forwardAudio(packet.getData(), packet.getOffset(), packet.getLength(), sender, target);
+                }
+                case TYPE_HEARTBEAT -> {
+                    String username = in.readUTF();
+                    VoiceClientEndpoint ep = clients.get(username);
+                    if (ep != null) {
+                        ep.address = packet.getAddress();
+                        ep.port = packet.getPort();
+                        ep.lastActiveTime = System.currentTimeMillis();
+                    }
+                }
+                case TYPE_DISCONNECT -> {
+                    String username = in.readUTF();
+                    if (username != null) {
+                        clients.remove(username);
+                        System.out.println("[VoiceServer-UDP] Client ngắt kết nối: " + username);
+                    }
+                }
+                default -> {
+                }
             }
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            // Gói tin bị lỗi cấu trúc, bỏ qua theo cơ chế UDP
+        }
+    }
+
+    private void forwardAudio(byte[] data, int offset, int length, String sender, String target) {
+        if (socket == null || socket.isClosed()) {
+            return;
         }
 
-        for (VoiceClientHandler handler : clients.values()) {
-            handler.close();
+        // 1. Nếu đích đến là 1 user cụ thể (Cuộc gọi thoại 1-1)
+        VoiceClientEndpoint targetEndpoint = clients.get(target);
+        if (targetEndpoint != null) {
+            try {
+                DatagramPacket outPacket = new DatagramPacket(
+                    data, offset, length, targetEndpoint.address, targetEndpoint.port
+                );
+                socket.send(outPacket);
+            } catch (IOException ignored) {
+            }
+            return;
+        }
+
+        // 2. Nếu đích đến là phòng chat nhóm (Group Voice Call)
+        for (Map.Entry<String, VoiceClientEndpoint> entry : clients.entrySet()) {
+            String clientUser = entry.getKey();
+            VoiceClientEndpoint ep = entry.getValue();
+            // Chuyển tiếp âm thanh đến tất cả thành viên trong cùng phòng ngoại trừ người đang nói
+            if (!clientUser.equals(sender) && target.equals(ep.targetUser)) {
+                try {
+                    DatagramPacket outPacket = new DatagramPacket(
+                        data, offset, length, ep.address, ep.port
+                    );
+                    socket.send(outPacket);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+    private void sendAck(VoiceClientEndpoint endpoint) {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.writeByte(TYPE_HEARTBEAT);
+            dos.writeUTF("SERVER");
+            dos.flush();
+            byte[] bytes = baos.toByteArray();
+            DatagramPacket ack = new DatagramPacket(bytes, bytes.length, endpoint.address, endpoint.port);
+            socket.send(ack);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private void cleanupStaleEndpoints() {
+        while (running) {
+            try {
+                Thread.sleep(10000);
+                long now = System.currentTimeMillis();
+                clients.entrySet().removeIf(entry -> {
+                    boolean stale = (now - entry.getValue().lastActiveTime) > 30000;
+                    if (stale) {
+                        System.out.println("[VoiceServer-UDP] Xoá endpoint hết hạn: " + entry.getKey());
+                    }
+                    return stale;
+                });
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+    }
+
+    public void stop() {
+        running = false;
+        if (cleanupThread != null) {
+            cleanupThread.interrupt();
+            cleanupThread = null;
+        }
+        if (socket != null && !socket.isClosed()) {
+            socket.close();
         }
         clients.clear();
-        System.out.println("[VoiceServer] Stopped.");
+        System.out.println("[VoiceServer-UDP] Đã dừng server.");
     }
 
     /**
-     * Handler quản lý kết nối và luồng âm thanh cho từng client
+     * Thông tin endpoint của mỗi client kết nối qua UDP
      */
-    public class VoiceClientHandler implements Runnable {
+    public static class VoiceClientEndpoint {
+        public final String username;
+        public volatile InetAddress address;
+        public volatile int port;
+        public final String targetUser;
+        public volatile long lastActiveTime;
 
-        private final Socket socket;
-        private DataInputStream in;
-        private DataOutputStream out;
-        private String username;
-        private String targetUser;
-        private volatile boolean active = false;
-
-        public VoiceClientHandler(Socket socket) {
-            this.socket = socket;
-        }
-
-        public boolean isActive() {
-            return active;
-        }
-
-        @Override
-        public void run() {
-            try {
-                in = new DataInputStream(socket.getInputStream());
-                out = new DataOutputStream(socket.getOutputStream());
-
-                // Bước bắt tay (Handshake): nhận username của client và người muốn đàm thoại
-                username = in.readUTF();
-                targetUser = in.readUTF();
-
-                clients.put(username, this);
-                active = true;
-
-                System.out.println("[VoiceServer] Client connected: " + username + " -> target: " + targetUser);
-
-                // Vòng lặp nhận dữ liệu âm thanh và chuyển tiếp cho targetUser
-                byte[] buffer = new byte[2048];
-                while (active && !socket.isClosed()) {
-                    int length = in.readInt();
-                    if (length <= 0) {
-                        break;
-                    }
-                    if (length > buffer.length) {
-                        buffer = new byte[length];
-                    }
-
-                    in.readFully(buffer, 0, length);
-
-                    VoiceClientHandler targetHandler = clients.get(targetUser);
-                    if (targetHandler != null && targetHandler.isActive()) {
-                        targetHandler.sendAudio(buffer, length);
-                    } else {
-                        // Group voice call broadcast: send audio to all other clients in same target room
-                        for (Map.Entry<String, VoiceClientHandler> entry : clients.entrySet()) {
-                            String cUser = entry.getKey();
-                            VoiceClientHandler h = entry.getValue();
-                            if (!cUser.equals(username) && targetUser.equals(h.getTargetUser()) && h.isActive()) {
-                                h.sendAudio(buffer, length);
-                            }
-                        }
-                    }
-                }
-            } catch (IOException e) {
-                // Client ngắt kết nối cuộc gọi
-            } finally {
-                close();
-            }
-        }
-
-        public String getTargetUser() {
-            return targetUser;
-        }
-
-        public synchronized void sendAudio(byte[] data, int length) {
-            if (!active || out == null) {
-                return;
-            }
-            try {
-                out.writeInt(length);
-                out.write(data, 0, length);
-                out.flush();
-            } catch (IOException e) {
-                close();
-            }
-        }
-
-        public void close() {
-            active = false;
-            if (username != null) {
-                clients.remove(username, this);
-            }
-            try {
-                if (socket != null && !socket.isClosed()) {
-                    socket.close();
-                }
-            } catch (IOException ignored) {
-            }
-            if (username != null) {
-                System.out.println("[VoiceServer] Client disconnected: " + username);
-            }
+        public VoiceClientEndpoint(String username, InetAddress address, int port, String targetUser, long lastActiveTime) {
+            this.username = username;
+            this.address = address;
+            this.port = port;
+            this.targetUser = targetUser;
+            this.lastActiveTime = lastActiveTime;
         }
     }
 }
