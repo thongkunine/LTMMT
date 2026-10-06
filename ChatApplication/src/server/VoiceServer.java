@@ -51,7 +51,7 @@ public class VoiceServer {
         running = true;
         try {
             socket = new DatagramSocket(port);
-            System.out.println("[VoiceServer-UDP] Khởi động thành công trên cổng UDP " + port);
+            System.out.println("[VoiceServer-UDP] Started on UDP port " + port);
 
             // Luồng dọn dẹp các endpoint không hoạt động quá 30 giây
             cleanupThread = new Thread(this::cleanupStaleEndpoints, "VoiceServer-UDP-Cleanup");
@@ -94,7 +94,7 @@ public class VoiceServer {
                         username, packet.getAddress(), packet.getPort(), targetUser, System.currentTimeMillis()
                     );
                     clients.put(username, endpoint);
-                    System.out.println("[VoiceServer-UDP] Client đã đăng ký: " + username
+                    System.out.println("[VoiceServer-UDP] Client da dang ky: " + username
                         + " (IP: " + packet.getAddress().getHostAddress() + ":" + packet.getPort() + ") -> Đích: " + targetUser);
 
                     // Gửi gói tin ACK phản hồi cho client
@@ -135,7 +135,7 @@ public class VoiceServer {
                     String username = in.readUTF();
                     if (username != null) {
                         clients.remove(username);
-                        System.out.println("[VoiceServer-UDP] Client ngắt kết nối: " + username);
+                        System.out.println("[VoiceServer-UDP] Client disconected: " + username);
                     }
                 }
                 default -> {
@@ -203,7 +203,7 @@ public class VoiceServer {
                 clients.entrySet().removeIf(entry -> {
                     boolean stale = (now - entry.getValue().lastActiveTime) > 30000;
                     if (stale) {
-                        System.out.println("[VoiceServer-UDP] Xoá endpoint hết hạn: " + entry.getKey());
+                        System.out.println("[VoiceServer-UDP] Xoa endpoint het han: " + entry.getKey());
                     }
                     return stale;
                 });
@@ -223,7 +223,7 @@ public class VoiceServer {
             socket.close();
         }
         clients.clear();
-        System.out.println("[VoiceServer-UDP] Đã dừng server.");
+        System.out.println("[VoiceServer-UDP] Stop server.");
     }
 
     /**

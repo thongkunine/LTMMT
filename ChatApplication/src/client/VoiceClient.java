@@ -256,7 +256,7 @@ public class VoiceClient {
 
                     if (running) {
                         System.out.println(
-                                "[VoiceClient-UDP] Lỗi nhận audio: "
+                                "[VoiceClient-UDP] Loi nhan audio: "
                                 + e.getMessage()
                         );
                     }
@@ -387,7 +387,7 @@ public class VoiceClient {
         socket = null;
 
         System.out.println(
-                "[VoiceClient-UDP] Đã ngắt kết nối."
+                "[VoiceClient-UDP] disconected."
         );
     }
 

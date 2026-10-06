@@ -93,8 +93,8 @@ public class VoiceCallManager {
             // Khởi động luồng phát âm thanh độc lập từ bộ đệm
             startPlaybackWorker();
 
-            System.out.println("[VoiceCallManager] Bắt đầu gọi thoại. Đệm phần cứng: " 
-                + SPEAKER_HARDWARE_BUFFER + " bytes, Pre-buffering: " + PREBUFFER_PACKETS + " gói.");
+            System.out.println("[VoiceCallManager] Bat dau goi thoai. Dem phan cung: " 
+                + SPEAKER_HARDWARE_BUFFER + " bytes, Pre-buffering: " + PREBUFFER_PACKETS + " goi.");
         } catch (LineUnavailableException e) {
             stop();
             throw e;
@@ -244,7 +244,7 @@ public class VoiceCallManager {
             speaker = null;
         }
 
-        System.out.println("[VoiceCallManager] Đã dừng cuộc gọi và giải phóng bộ đệm.");
+        System.out.println("[VoiceCallManager] da dung cuoc goi va giai phong bo dem.");
     }
 
     public boolean isRunning() {
