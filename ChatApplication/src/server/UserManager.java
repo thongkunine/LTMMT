@@ -8,6 +8,14 @@ import java.util.concurrent.ConcurrentHashMap;
 public class UserManager {
 
     private final ConcurrentHashMap<String, ClientHandler> users = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> registeredUsers = new ConcurrentHashMap<>();
+
+    public boolean register(String username, String password, String fullName) {
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+        return registeredUsers.putIfAbsent(username.trim(), password == null ? "" : password) == null;
+    }
 
     public boolean login(String username, ClientHandler handler) {
         if (username == null || username.isBlank()) {

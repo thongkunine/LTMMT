@@ -38,6 +38,10 @@ public class Room {
         return members.isEmpty();
     }
 
+    public List<ClientHandler> getMembers() {
+        return members;
+    }
+
     public List<String> getMemberNames() {
         List<String> names = new ArrayList<>();
         for (ClientHandler member : members) {
