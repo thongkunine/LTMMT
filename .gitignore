@@ -1,3 +1,10 @@
-/ChatApplication/dist/
-ChatApplication/build/
-ChatApplication/nbproject/private/
+# Java compiled files
+*.class
+
+# Build directories
+bin/
+build/
+dist/
+
+# NetBeans settings
+nbproject/private/
