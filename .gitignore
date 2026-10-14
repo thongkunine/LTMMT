@@ -1,10 +1,57 @@
-# Java compiled files
+# ==========================
+# JAVA
+# ==========================
 *.class
 
-# Build directories
-bin/
-build/
-dist/
+# ==========================
+# BUILD DIRECTORIES
+# ==========================
+**/build/
+**/dist/
+**/target/
+**/bin/
+**/out/
+**/node_modules/
 
-# NetBeans settings
-nbproject/private/
+# ==========================
+# NETBEANS
+# ==========================
+**/nbproject/private/
+
+# ==========================
+# IDE SETTINGS
+# ==========================
+**/.idea/
+**/.vscode/
+*.iml
+
+# ==========================
+# BINARY FILES
+# ==========================
+*.jar
+*.war
+*.ear
+*.zip
+*.rar
+*.7z
+
+# ==========================
+# TEMPORARY FILES
+# ==========================
+*.log
+*.tmp
+*.bak
+**/sources.txt
+
+# ==========================
+# OPERATING SYSTEM
+# ==========================
+.DS_Store
+Thumbs.db
+
+# ==========================
+# ENVIRONMENT
+# ==========================
+.env
+.env.*
+!.env.example

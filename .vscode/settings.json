@@ -1,5 +1,0 @@
-{
-    "java.project.referencedLibraries": [
-        "ChatApplication/dist/lib/**/*.jar"
-    ]
-}
