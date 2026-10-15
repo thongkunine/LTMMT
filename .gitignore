@@ -1,0 +1,10 @@
+# Java compiled files
+*.class
+
+# Build directories
+bin/
+build/
+dist/
+
+# NetBeans settings
+nbproject/private/

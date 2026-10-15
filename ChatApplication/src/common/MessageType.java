@@ -1,0 +1,31 @@
+package common;
+
+public enum MessageType {
+    LOGIN,
+    LOGIN_OK,
+    LOGIN_FAIL,
+    REGISTER,
+    REGISTER_OK,
+    REGISTER_FAIL,
+    CHAT,
+    PRIVATE_MESSAGE,
+    JOIN,
+    LEAVE,
+    SYSTEM,
+    CREATE_ROOM,
+    JOIN_ROOM,
+    ROOM_LIST,
+    USER_LIST,
+    HISTORY,
+    FILE_MESSAGE,
+    CALL_REQUEST,
+    CALL_ACCEPT,
+    CALL_REJECT,
+    CALL_END,
+    VOICE_DATA,
+    VIDEO_CALL_REQUEST,
+    VIDEO_CALL_ACCEPT,
+    VIDEO_CALL_REJECT,
+    VIDEO_CALL_END,
+    
+}
